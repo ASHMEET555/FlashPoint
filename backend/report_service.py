@@ -2,63 +2,59 @@
 
 Responsibility:
 - Build a structured intelligence briefing prompt from the live news buffer
-- Query Google Gemini to synthesise the prompt into a SITREP
-- Return the report as a plain-text string
+- Query Google Gemini to synthesise the prompt into a SITREP (Markdown)
+- Render the Markdown into a branded PDF and return the raw bytes
 
 Public API
 ----------
-    generate_sitrep(news_buffer: Iterable[dict]) -> str
-        Accepts the current event buffer and returns a formatted report.
+    generate_sitrep(news_buffer) -> str   — returns raw Markdown string
+    generate_pdf_bytes(news_buffer) -> bytes — Markdown → branded PDF
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
+from collections import Counter
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from typing import Any
 
 import google.generativeai as genai
 from dotenv import load_dotenv
+from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
 # ── Gemini setup ──────────────────────────────────────────────────────
 load_dotenv()
-_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-genai.configure(api_key=_GEMINI_API_KEY)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 _model = genai.GenerativeModel("gemini-flash-latest")
 
 
 # ── Prompt template ───────────────────────────────────────────────────
 _PROMPT_TEMPLATE = """\
-TASK: Synthesize the provided 'Raw Intel' into a professional News Briefing.
+TASK: Synthesize the provided 'Raw Intel' into a professional intelligence briefing.
 
 CONSTRAINTS:
-1. Use ONLY the provided text below. Do NOT fill in missing data like names, dates, or events not present.
-2. Tone: Objective, Journalistic, Concise.
-3. Cite the source name in brackets [Source] for every claim.
-4. Reply in plain text, do not give response in markdown.
+1. Use ONLY the provided text below. Do not invent facts, names, or events.
+2. Tone: Objective, journalistic, concise.
+3. Cite the source name in brackets [Source] after every claim.
+4. Reply in **Markdown only**. Use ##, ###, -, and **bold** formatting freely.
 
 RAW INTEL:
 {context}
 
-REQUIRED OUTPUT FORMAT:
+REQUIRED SECTIONS (use these exact ## headings):
 ## Global Situation Summary
-[Write a 2-3 sentence executive summary of the provided text]
-
 ## Key Developments
-- [Category/Region]: [Detail] [Source]
-- [Category/Region]: [Detail] [Source]
-
+## Narrative Divergence
 ## Outlook
-[Short forecast based *only* on the provided trends]
 """
 
 
 def _build_context(news_buffer: Iterable[dict[str, Any]]) -> str:
-    """Format buffer items into a numbered context block for the prompt."""
     lines = []
     for item in news_buffer:
         text   = item.get("text",   "N/A")
@@ -69,26 +65,158 @@ def _build_context(news_buffer: Iterable[dict[str, Any]]) -> str:
 
 
 def generate_sitrep(news_buffer: Iterable[dict[str, Any]]) -> str:
-    """Generate a SITREP from the current news buffer via Gemini.
-
-    Args:
-        news_buffer: Iterable of event dicts with keys
-            [text, source, bias, url, timestamp].
-
-    Returns:
-        Plain-text intelligence report string.
-
-    Raises:
-        RuntimeError: If Gemini returns an empty or error response.
-    """
-    context = _build_context(news_buffer)
-    prompt  = _PROMPT_TEMPLATE.format(context=context)
-
-    logger.debug("Sending SITREP prompt to Gemini (%d chars)", len(prompt))
-
+    """Call Gemini and return the raw Markdown SITREP string."""
+    context  = _build_context(news_buffer)
+    prompt   = _PROMPT_TEMPLATE.format(context=context)
     response = _model.generate_content(prompt)
-
     if not response or not response.text:
         raise RuntimeError("Gemini returned an empty response.")
-
     return response.text
+
+
+# ── PDF rendering ─────────────────────────────────────────────────────
+
+_CYAN  = (0,   229, 255)
+_AMBER = (255, 183, 3)
+_WHITE = (224, 230, 237)
+_DARK  = (13,  17,  23)
+_GREY  = (100, 116, 139)
+
+
+class _SitrepPDF(FPDF):
+    def __init__(self, generated_at: str):
+        super().__init__(orientation="P", unit="mm", format="A4")
+        self._generated_at = generated_at
+        self.set_margins(14, 35, 14)
+        self.set_auto_page_break(auto=True, margin=18)
+
+    def header(self):
+        # Amber classification bar
+        self.set_fill_color(*_AMBER)
+        self.rect(0, 0, 210, 7, style="F")
+        self.set_font("Courier", "B", 7)
+        self.set_text_color(20, 20, 20)
+        self.set_xy(0, 1)
+        self.cell(210, 5, "FLASHPOINT INTELLIGENCE — UNCLASSIFIED // FOR OFFICIAL USE ONLY", align="C")
+
+        # Dark title block
+        self.set_fill_color(*_DARK)
+        self.rect(0, 7, 210, 19, style="F")
+        self.set_font("Courier", "B", 15)
+        self.set_text_color(*_CYAN)
+        self.set_xy(14, 9)
+        self.cell(0, 8, "FLASHPOINT  INTEL SITREP")
+        self.set_font("Courier", "", 7)
+        self.set_text_color(*_GREY)
+        self.set_xy(14, 19)
+        self.cell(0, 4, f"Generated: {self._generated_at} UTC   |   Classification: UNCLASSIFIED")
+
+        # Cyan rule
+        self.set_draw_color(*_CYAN)
+        self.set_line_width(0.4)
+        self.line(14, 26, 196, 26)
+        self.ln(4)
+
+    def footer(self):
+        self.set_y(-13)
+        self.set_draw_color(*_GREY)
+        self.set_line_width(0.25)
+        self.line(14, self.get_y(), 196, self.get_y())
+        self.set_font("Courier", "", 7)
+        self.set_text_color(*_GREY)
+        self.cell(0, 6, f"FLASHPOINT SITREP  |  Page {self.page_no()}/{{nb}}  |  DO NOT DISTRIBUTE", align="C")
+
+
+def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
+    """Walk the Markdown token stream and render into the FPDF canvas."""
+    # Strip fenced code fences (unlikely in SITREP but defensive)
+    md_text = re.sub(r"```.*?```", "", md_text, flags=re.DOTALL)
+
+    for raw_line in md_text.splitlines():
+        line = raw_line.rstrip()
+
+        # H2 heading  →  cyan bold section heading + underline
+        if line.startswith("## "):
+            pdf.ln(3)
+            heading = line[3:].strip().upper()
+            pdf.set_font("Courier", "B", 10)
+            pdf.set_text_color(*_CYAN)
+            pdf.cell(0, 6, heading, ln=True)
+            pdf.set_draw_color(*_CYAN)
+            pdf.set_line_width(0.25)
+            pdf.line(14, pdf.get_y(), 196, pdf.get_y())
+            pdf.ln(2)
+            continue
+
+        # H3 heading  →  grey bold sub-heading
+        if line.startswith("### "):
+            heading = line[4:].strip()
+            pdf.set_font("Courier", "B", 9)
+            pdf.set_text_color(*_GREY)
+            pdf.cell(0, 5, heading, ln=True)
+            pdf.ln(1)
+            continue
+
+        # Bullet / list item
+        if re.match(r"^[-*]\s+", line):
+            text = re.sub(r"^[-*]\s+", "", line)
+            text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)   # strip bold markers
+            pdf.set_font("Courier", "", 8.5)
+            pdf.set_text_color(*_WHITE)
+            pdf.set_x(18)
+            pdf.multi_cell(0, 4.5, f"•  {text}")
+            continue
+
+        # Blank line
+        if not line.strip():
+            pdf.ln(2)
+            continue
+
+        # Normal paragraph (strip inline markdown)
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", line)   # bold
+        text = re.sub(r"\*(.+?)\*",     r"\1", text)   # italic
+        text = re.sub(r"`(.+?)`",       r"\1", text)   # inline code
+        pdf.set_font("Courier", "", 8.5)
+        pdf.set_text_color(*_WHITE)
+        pdf.set_x(14)
+        pdf.multi_cell(0, 4.5, text)
+
+
+def generate_pdf_bytes(news_buffer: Iterable[dict[str, Any]]) -> bytes:
+    """Generate a Markdown SITREP via Gemini, then render it to PDF bytes."""
+    items        = list(news_buffer)
+    md_text      = generate_sitrep(items)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M")
+
+    pdf = _SitrepPDF(generated_at=generated_at)
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    # Source summary block
+    if items:
+        counts = Counter(d.get("source", "Unknown") for d in items)
+        pdf.set_font("Courier", "B", 8)
+        pdf.set_text_color(*_CYAN)
+        pdf.cell(0, 5, "INTELLIGENCE SOURCES", ln=True)
+        pdf.set_draw_color(*_CYAN)
+        pdf.set_line_width(0.2)
+        pdf.line(14, pdf.get_y(), 196, pdf.get_y())
+        pdf.ln(2)
+        pdf.set_font("Courier", "", 8)
+        pdf.set_text_color(*_WHITE)
+        for src, cnt in counts.most_common():
+            pdf.cell(0, 4, f"  •  {src}  ({cnt})", ln=True)
+        pdf.ln(5)
+
+    # Render the Markdown body
+    _md_to_pdf(pdf, md_text)
+
+    # Closing banner
+    pdf.ln(4)
+    pdf.set_fill_color(*_AMBER)
+    pdf.set_text_color(20, 20, 20)
+    pdf.set_font("Courier", "B", 7)
+    pdf.cell(0, 6, "END OF REPORT  —  FLASHPOINT INTELLIGENCE  —  UNCLASSIFIED // FOUO",
+             align="C", fill=True, ln=True)
+
+    return bytes(pdf.output())

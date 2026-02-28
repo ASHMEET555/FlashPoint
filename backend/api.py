@@ -25,12 +25,12 @@ from typing import Any, AsyncGenerator, Dict, List
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from geo_extractor import extract_location
-from report_service import generate_sitrep
+from report_service import generate_pdf_bytes, generate_sitrep
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +67,16 @@ def _broadcast(event: Dict[str, Any]) -> None:
 
 # ── Static frontend ───────────────────────────────────────────────────
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "web"
+_ASSETS_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "assets"
+_THEMES_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "themes"
 
 
 # ── Routes ────────────────────────────────────────────────────────────
+
+@app.get("/theme-preview", tags=["meta"], include_in_schema=False)
+def theme_preview():
+    """Serve the interactive theme-picker preview page."""
+    return FileResponse(str(_THEMES_DIR / "preview.html"), media_type="text/html")
 
 @app.get("/health", tags=["meta"])
 def health():
@@ -161,6 +168,33 @@ def generate_report():
     return {"report": report}
 
 
+@app.get("/v1/generate_report/pdf", tags=["intel"])
+def generate_report_pdf():
+    """Generate a SITREP and return it as a downloadable PDF file.
+
+    The PDF is rendered server-side using fpdf2 with full FlashPoint
+    branding: classification banner, coloured section headings,
+    source summary table, and a numbered footer.
+    """
+    if not latest_news:
+        raise HTTPException(status_code=400, detail="No intelligence data in buffer yet.")
+    try:
+        pdf_bytes = generate_pdf_bytes(list(latest_news))
+    except Exception as exc:
+        logger.exception("PDF generation failed")
+        raise HTTPException(status_code=503, detail=f"PDF generation failed: {exc}") from exc
+
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    filename = f"SITREP_{ts}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── Chat endpoint ─────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -224,6 +258,10 @@ async def chat(req: ChatRequest):
 
 
 # ── Static mount (must be LAST — catches everything else) ─────────────
+if _ASSETS_DIR.is_dir():
+    app.mount("/assets",  StaticFiles(directory=str(_ASSETS_DIR)),  name="assets")
+if _THEMES_DIR.is_dir():
+    app.mount("/themes",  StaticFiles(directory=str(_THEMES_DIR)),  name="themes")
 if _FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
 else:

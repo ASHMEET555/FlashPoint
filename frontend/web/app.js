@@ -9,10 +9,11 @@
 "use strict";
 
 // ── Config ────────────────────────────────────────────────────────────
-const API_BASE     = "";          // Same origin — served by FastAPI
-const SSE_FEED_URL = `${API_BASE}/v1/feed/stream`;
-const CHAT_URL     = `${API_BASE}/v1/chat`;
-const REPORT_URL   = `${API_BASE}/v1/generate_report`;
+const API_BASE      = "";          // Same origin — served by FastAPI
+const SSE_FEED_URL  = `${API_BASE}/v1/feed/stream`;
+const CHAT_URL      = `${API_BASE}/v1/chat`;
+const REPORT_URL    = `${API_BASE}/v1/generate_report`;
+const REPORT_PDF_URL = `${API_BASE}/v1/generate_report/pdf`;
 
 // ── State ─────────────────────────────────────────────────────────────
 let feedItems    = [];              // Full ordered array, newest last
@@ -266,23 +267,45 @@ document.getElementById("generate-report-btn").addEventListener("click", async (
   }
 });
 
-document.getElementById("download-pdf-btn").addEventListener("click", () => {
-  if (!latestReport) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+document.getElementById("download-pdf-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("download-pdf-btn");
+  btn.textContent = "⏳ BUILDING PDF...";
+  btn.disabled = true;
 
-  doc.setFont("courier", "bold");
-  doc.setFontSize(14);
-  doc.text("FLASHPOINT INTELLIGENCE SITREP", 105, 15, { align: "center" });
-  doc.setDrawColor(0, 229, 255);
-  doc.setLineWidth(0.5);
-  doc.line(10, 20, 200, 20);
-  doc.setFont("courier", "normal");
-  doc.setFontSize(10);
-  doc.text(doc.splitTextToSize(latestReport, 185), 12, 28);
-
-  const ts = new Date().toISOString().slice(0,16).replace(/[-:T]/g,"");
-  doc.save(`SITREP_${ts}.pdf`);
+  try {
+    if (USE_DUMMY) {
+      // Offline: build a minimal PDF client-side for demo purposes
+      const ts   = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+      const blob = new Blob(
+        [`%PDF-1.4\n% dummy PDF placeholder — run backend for full SITREP\n`],
+        { type: "application/pdf" },
+      );
+      const a    = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(blob),
+        download: `SITREP_${ts}.pdf`,
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } else {
+      // Live: stream the server-rendered PDF directly as a file download
+      const res = await fetch(REPORT_PDF_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob     = await res.blob();
+      const filename = (res.headers.get("Content-Disposition") || "")
+        .match(/filename="?([^"]+)"?/)?.[1] ?? "SITREP.pdf";
+      const a = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(blob),
+        download: filename,
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  } catch (e) {
+    alert(`⚠️ PDF Error: ${e.message}`);
+  } finally {
+    btn.textContent = "⬇ DOWNLOAD PDF";
+    btn.disabled = false;
+  }
 });
 
 

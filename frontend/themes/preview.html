@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FLASHPOINT | Theme Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: #05070a;
+      color: #cdd6f4;
+      padding: 32px 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.1rem;
+      letter-spacing: 0.15em;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #334155;
+      margin-bottom: 32px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Theme switcher tabs ── */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 10px 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .tab-btn[data-theme="original"]     { border: 1px solid #00e5ff; color: #00e5ff; }
+    .tab-btn[data-theme="blood-red"]    { border: 1px solid #c81414; color: #ff2d2d; }
+    .tab-btn[data-theme="ghost"]        { border: 1px solid #7c3aed; color: #bd93f9; }
+    .tab-btn[data-theme="desert"]       { border: 1px solid #b48a28; color: #e8a838; }
+
+    .tab-btn[data-theme="original"].active     { background: rgba(0,229,255,0.1);   box-shadow: 0 0 12px rgba(0,229,255,0.3); }
+    .tab-btn[data-theme="blood-red"].active    { background: rgba(200,20,20,0.12);  box-shadow: 0 0 12px rgba(200,20,20,0.3); }
+    .tab-btn[data-theme="ghost"].active        { background: rgba(124,58,237,0.14); box-shadow: 0 0 12px rgba(124,58,237,0.4); }
+    .tab-btn[data-theme="desert"].active       { background: rgba(180,140,40,0.12); box-shadow: 0 0 12px rgba(180,140,40,0.3); }
+
+    .tab-btn:not(.active):hover { opacity: 0.75; }
+
+    /* ── Preview frame ── */
+    .frame-wrap {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #1e293b;
+      width: 100%;
+      /* 16:9 aspect ratio for the preview */
+      aspect-ratio: 16/9;
+    }
+
+    .frame-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* ── Description cards ── */
+    .theme-descriptions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+
+    .desc-card {
+      border-radius: 4px;
+      padding: 16px 18px;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      cursor: pointer;
+      transition: box-shadow 0.2s, opacity 0.2s;
+      opacity: 0.6;
+    }
+
+    .desc-card.active { opacity: 1; }
+
+    .desc-card[data-theme="original"]  { background: rgba(0,229,255,0.04);   border: 1px solid rgba(0,229,255,0.2); }
+    .desc-card[data-theme="blood-red"] { background: rgba(200,20,20,0.05);   border: 1px solid rgba(200,20,20,0.25); }
+    .desc-card[data-theme="ghost"]     { background: rgba(124,58,237,0.06);  border: 1px solid rgba(124,58,237,0.25); }
+    .desc-card[data-theme="desert"]    { background: rgba(180,140,40,0.05);  border: 1px solid rgba(180,140,40,0.22); }
+
+    .desc-card[data-theme="original"].active  { box-shadow: 0 0 14px rgba(0,229,255,0.2); }
+    .desc-card[data-theme="blood-red"].active { box-shadow: 0 0 14px rgba(200,20,20,0.2); }
+    .desc-card[data-theme="ghost"].active     { box-shadow: 0 0 14px rgba(124,58,237,0.25); }
+    .desc-card[data-theme="desert"].active    { box-shadow: 0 0 14px rgba(180,140,40,0.2); }
+
+    .desc-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    .desc-card[data-theme="original"]  .desc-title { color: #00e5ff; }
+    .desc-card[data-theme="blood-red"] .desc-title { color: #ff2d2d; }
+    .desc-card[data-theme="ghost"]     .desc-title { color: #bd93f9; }
+    .desc-card[data-theme="desert"]    .desc-title { color: #e8a838; }
+
+    .desc-text { color: #64748b; }
+
+    /* ── Apply instruction ── */
+    .apply-hint {
+      margin-top: 28px;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      font-size: 0.76rem;
+      color: #475569;
+      line-height: 1.7;
+    }
+
+    .apply-hint code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ FLASHPOINT — THEME PREVIEW</h1>
+  <p class="subtitle">SELECT A THEME BELOW TO PREVIEW · CLICK A CARD TO SWITCH</p>
+
+  <!-- ── Tab buttons ── -->
+  <div class="tabs">
+    <button class="tab-btn active" data-theme="original">● INTEL COMMAND (CURRENT)</button>
+    <button class="tab-btn" data-theme="blood-red">● BLOOD RED OPS</button>
+    <button class="tab-btn" data-theme="ghost">● GHOST PROTOCOL</button>
+    <button class="tab-btn" data-theme="desert">● DESERT STORM</button>
+  </div>
+
+  <!-- ── Preview iframe ── -->
+  <div class="frame-wrap">
+    <iframe id="preview-frame" src="/preview-original" title="Theme Preview"></iframe>
+  </div>
+
+  <!-- ── Description cards ── -->
+  <div class="theme-descriptions">
+
+    <div class="desc-card active" data-theme="original">
+      <div class="desc-title">INTEL COMMAND</div>
+      <div class="desc-text">
+        The current production theme. Deep navy-black base with electric cyan (#00e5ff) accents.
+        Clean, high-information-density command centre feel.
+      </div>
+    </div>
+
+    <div class="desc-card" data-theme="blood-red">
+      <div class="desc-title">BLOOD RED OPS</div>
+      <div class="desc-text">
+        Pure black base (#080a0c) with aggressive crimson/red (#ff2d2d) accents.
+        High-contrast, maximum threat-level urgency. Amber warnings preserved.
+      </div>
+    </div>
+
+    <div class="desc-card" data-theme="ghost">
+      <div class="desc-title">GHOST PROTOCOL</div>
+      <div class="desc-text">
+        Near-black indigo base (#070710) with electric violet (#bd93f9 / #7c3aed) neon.
+        Stealth-operative, signals-intelligence aesthetic. Soft glow effects.
+      </div>
+    </div>
+
+    <div class="desc-card" data-theme="desert">
+      <div class="desc-title">DESERT STORM</div>
+      <div class="desc-text">
+        Dark khaki/olive base (#0e0d09) with warm amber-gold (#e8a838) accents.
+        OSINT field-terminal vibe — like a declassified document under lamplight.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Apply hint ── -->
+  <div class="apply-hint">
+    <strong style="color:#94a3b8;">TO APPLY A THEME:</strong> In <code>frontend/web/index.html</code>,
+    replace <code>&lt;link rel="stylesheet" href="styles.css" /&gt;</code> with the chosen theme file from
+    <code>frontend/themes/</code> — e.g. <code>href="/themes/theme-ghost-protocol.css"</code> — or copy it
+    over <code>styles.css</code>.
+  </div>
+
+  <script>
+    // Theme → preview URL mapping
+    // Each preview URL just serves index.html with a different stylesheet injected via query param
+    // (handled by the switcher below using srcdoc injection from fetched HTML)
+    const THEMES = {
+      'original':  { css: '/web/styles.css',                    label: 'INTEL COMMAND'   },
+      'blood-red': { css: '/themes/theme-blood-red.css',        label: 'BLOOD RED OPS'   },
+      'ghost':     { css: '/themes/theme-ghost-protocol.css',   label: 'GHOST PROTOCOL'  },
+      'desert':    { css: '/themes/theme-desert-storm.css',     label: 'DESERT STORM'    },
+    };
+
+    let cachedHTML = null;
+
+    async function getBaseHTML() {
+      if (cachedHTML) return cachedHTML;
+      const r = await fetch('/');
+      cachedHTML = await r.text();
+      return cachedHTML;
+    }
+
+    async function applyTheme(themeKey) {
+      const frame = document.getElementById('preview-frame');
+      const { css } = THEMES[themeKey];
+
+      // Fetch the main app HTML and swap stylesheet href
+      const html = await getBaseHTML();
+      const patched = html.replace(
+        /href="styles\.css"/,
+        `href="${css}"`
+      );
+
+      // Write into iframe via srcdoc
+      frame.srcdoc = patched;
+
+      // Update active states
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.theme === themeKey);
+      });
+      document.querySelectorAll('.desc-card').forEach(c => {
+        c.classList.toggle('active', c.dataset.theme === themeKey);
+      });
+    }
+
+    // Tab clicks
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyTheme(btn.dataset.theme));
+    });
+
+    // Description card clicks
+    document.querySelectorAll('.desc-card').forEach(card => {
+      card.addEventListener('click', () => applyTheme(card.dataset.theme));
+    });
+
+    // Load default
+    applyTheme('original');
+  </script>
+
+</body>
+</html>
