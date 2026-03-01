@@ -23,9 +23,10 @@ from collections import deque
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -68,15 +69,9 @@ def _broadcast(event: Dict[str, Any]) -> None:
 # ── Static frontend ───────────────────────────────────────────────────
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "web"
 _ASSETS_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "assets"
-_THEMES_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "themes"
 
 
 # ── Routes ────────────────────────────────────────────────────────────
-
-@app.get("/theme-preview", tags=["meta"], include_in_schema=False)
-def theme_preview():
-    """Serve the interactive theme-picker preview page."""
-    return FileResponse(str(_THEMES_DIR / "preview.html"), media_type="text/html")
 
 @app.get("/health", tags=["meta"])
 def health():
@@ -157,29 +152,29 @@ def get_feed():
 
 
 @app.get("/v1/generate_report", tags=["intel"])
-def generate_report():
-    """Generate a Gemini SITREP from the current buffer."""
+async def generate_report():
+    """Generate a SITREP from the current buffer via OpenRouter."""
     if not latest_news:
         raise HTTPException(status_code=400, detail="No intelligence data in buffer yet.")
     try:
-        report = generate_sitrep(latest_news)
+        items = list(latest_news)
+        loop  = asyncio.get_event_loop()
+        report = await loop.run_in_executor(None, generate_sitrep, items)
     except Exception as exc:
+        logger.exception("Report generation failed")
         raise HTTPException(status_code=503, detail=f"Report generation failed: {exc}") from exc
     return {"report": report}
 
 
 @app.get("/v1/generate_report/pdf", tags=["intel"])
-def generate_report_pdf():
-    """Generate a SITREP and return it as a downloadable PDF file.
-
-    The PDF is rendered server-side using fpdf2 with full FlashPoint
-    branding: classification banner, coloured section headings,
-    source summary table, and a numbered footer.
-    """
+async def generate_report_pdf():
+    """Generate a SITREP and return it as a downloadable PDF file."""
     if not latest_news:
         raise HTTPException(status_code=400, detail="No intelligence data in buffer yet.")
     try:
-        pdf_bytes = generate_pdf_bytes(list(latest_news))
+        items     = list(latest_news)
+        loop      = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, items)
     except Exception as exc:
         logger.exception("PDF generation failed")
         raise HTTPException(status_code=503, detail=f"PDF generation failed: {exc}") from exc
@@ -204,50 +199,62 @@ class ChatRequest(BaseModel):
 
 @app.post("/v1/chat", tags=["intel"])
 async def chat(req: ChatRequest):
-    """Accept a user message and stream back a Gemini response via SSE.
+    """Proxy user message to the Pathway RAG query service (port 8011).
 
-    The client POSTs JSON, receives a ``text/event-stream`` response where
-    each SSE ``data:`` line contains one token chunk, and a final
-    ``data: [DONE]`` sentinel closes the stream.
+    The RAG pipeline does retrieval over the live document store, builds
+    a context-grounded prompt, and runs LLM inference via OpenRouter.
+    The result is returned as an SSE stream of token chunks so the
+    frontend typing effect works unchanged.
     """
-    import google.generativeai as genai
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-flash-latest")
-
-    # Build the conversation history for multi-turn context
-    context_items = "\n".join(
-        f"- {d.get('text','')} [{d.get('source','')}]"
-        for d in list(latest_news)[-20:]   # last 20 feed items as context
-    )
-    system = (
-        "You are FLASHPOINT, an AI intelligence analyst. "
-        "You have access to the following recent intelligence feed:\n"
-        f"{context_items}\n\n"
-        "Answer the analyst's question concisely and factually. "
-        "If the answer is not in the feed, say so."
-    )
-
-    # Reconstruct history for multi-turn
-    history_text = "\n".join(
-        f"{'User' if m['role']=='user' else 'Assistant'}: {m['content']}"
-        for m in req.history[-6:]  # keep last 3 turns
-    )
-    full_prompt = f"{system}\n\n{history_text}\nUser: {req.message}\nAssistant:"
+    PATHWAY_QUERY_URL = "http://localhost:8011/v1/query"
 
     async def token_stream() -> AsyncGenerator[str, None]:
         try:
-            response = model.generate_content(full_prompt, stream=True)
-            for chunk in response:
-                if chunk.text:
-                    payload = json.dumps({"token": chunk.text})
-                    yield f"data: {payload}\n\n"
-                    await asyncio.sleep(0)   # yield to event loop
-            yield "data: [DONE]\n\n"
+            # Pathway's webserver closes the connection after sending the
+            # response body (HTTP/1.0 style), which makes httpx raise
+            # RemoteProtocolError even though the full body was received.
+            # Use a raw stream request so we can read whatever bytes arrived.
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                try:
+                    async with client.stream(
+                        "POST",
+                        PATHWAY_QUERY_URL,
+                        json={"messages": req.message},
+                    ) as resp:
+                        raw = await resp.aread()
+                except httpx.RemoteProtocolError as e:
+                    # Connection closed after body sent — still try to use
+                    # whatever was buffered in the response object
+                    raw = getattr(e, "response", None)
+                    raw = raw.content if raw else b""
+
+                if not raw:
+                    yield f"data: {json.dumps({'error': 'Empty response from RAG pipeline'})}\n\n"
+                    return
+
+                try:
+                    data   = json.loads(raw)
+                    answer = data.get("result", "") if isinstance(data, dict) else str(data)
+                except Exception:
+                    answer = raw.decode("utf-8", errors="replace")
+
+                if not answer:
+                    answer = "No relevant intelligence found in the document store."
+
+                # Stream word-by-word so the frontend typing effect fires
+                for word in answer.split(" "):
+                    yield f"data: {json.dumps({'token': word + ' '})}\n\n"
+                    await asyncio.sleep(0.01)
+
+        except httpx.HTTPStatusError as exc:
+            logger.error("Pathway query service error: %s", exc)
+            yield f"data: {json.dumps({'error': f'RAG service error: {exc.response.status_code}'})}\n\n"
+        except httpx.ConnectError:
+            yield f"data: {json.dumps({'error': 'Pipeline not running — start pipeline.py first'})}\n\n"
         except Exception as exc:
+            logger.exception("Chat proxy error")
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -260,8 +267,6 @@ async def chat(req: ChatRequest):
 # ── Static mount (must be LAST — catches everything else) ─────────────
 if _ASSETS_DIR.is_dir():
     app.mount("/assets",  StaticFiles(directory=str(_ASSETS_DIR)),  name="assets")
-if _THEMES_DIR.is_dir():
-    app.mount("/themes",  StaticFiles(directory=str(_THEMES_DIR)),  name="themes")
 if _FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
 else:

@@ -1,3 +1,11 @@
+/* ═══════════════════════════════════════════════════════════════
+   THEME: REDACTED
+   Classified-document aesthetic — light paper background,
+   black ink, red stamp accents. Total inversion from cyberpunk.
+   No glows. No dark bg. Looks like a declassified CIA file.
+════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

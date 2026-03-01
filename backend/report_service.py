@@ -21,16 +21,19 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
-import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
-# ── Gemini setup ──────────────────────────────────────────────────────
+# ── OpenRouter setup ──────────────────────────────────────────────────
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-_model = genai.GenerativeModel("gemini-flash-latest")
+_client = OpenAI(
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1",
+)
+_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
 
 # ── Prompt template ───────────────────────────────────────────────────
@@ -65,13 +68,18 @@ def _build_context(news_buffer: Iterable[dict[str, Any]]) -> str:
 
 
 def generate_sitrep(news_buffer: Iterable[dict[str, Any]]) -> str:
-    """Call Gemini and return the raw Markdown SITREP string."""
+    """Call OpenRouter and return the raw Markdown SITREP string."""
     context  = _build_context(news_buffer)
     prompt   = _PROMPT_TEMPLATE.format(context=context)
-    response = _model.generate_content(prompt)
-    if not response or not response.text:
-        raise RuntimeError("Gemini returned an empty response.")
-    return response.text
+    response = _client.chat.completions.create(
+        model=_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+    )
+    text = response.choices[0].message.content if response.choices else None
+    if not text:
+        raise RuntimeError("OpenRouter returned an empty response.")
+    return text
 
 
 # ── PDF rendering ─────────────────────────────────────────────────────

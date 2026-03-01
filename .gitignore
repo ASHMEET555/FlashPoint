@@ -1,9 +1,6 @@
 .env
-.env.example
-venv/
 .venv/
 backend/__pycache__/
 backend/connectors/__pycache__/
-frontend/__pycache__/
 .vscode/
 session_flashpoint.session
