@@ -4,3 +4,4 @@ backend/__pycache__/
 backend/connectors/__pycache__/
 .vscode/
 session_flashpoint.session
+session_flashpoint.session-journal

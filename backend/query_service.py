@@ -15,7 +15,11 @@ from pathway.xpacks.llm.document_store import DocumentStore
 
 from rag_pipeline import build_prompts_udf
 
+from dotenv import load_dotenv # Add this
+import pathway as pw
+from pathway.xpacks.llm import llms
 
+load_dotenv() # Add this
 # ── Schema ────────────────────────────────────────────────────────────
 class QuerySchema(pw.Schema):
     """Incoming query payload from the REST endpoint."""

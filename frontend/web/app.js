@@ -395,7 +395,19 @@ document.getElementById("chat-form").addEventListener("submit", async (e) => {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        let backendError = null;
+      try {
+        const obj = JSON.parse(payload);
+        if (obj.token) {
+          full += obj.token;
+          thinkBubble.textContent = full;
+          document.getElementById("chat-history").scrollTop = 9999;
+        }
+        if (obj.error) backendError = obj.error;
+      } catch (_) { /* non-JSON line */ }
 
+// Throw the error outside the try/catch block so the outer catch can handle it
+if (backendError) throw new Error(backendError);
         buf += decoder.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop();   // keep partial last line
