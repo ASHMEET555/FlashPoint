@@ -11,6 +11,7 @@ All sources normalized into unified InputSchema for downstream processing.
 """
 
 import pathway as pw
+import pandas as pd
 from connectors.telegram_src import TelegramSource
 from connectors.reddit_src import RedditSource
 from connectors.news_src import NewsSource
@@ -78,37 +79,40 @@ def get_data_stream():
     )
    
     # ========== SOURCE 2: RSS FEEDS ==========
-    # Russia Today: pro-Russia state media
-    t_rss_russia = pw.io.python.read(
-        RssSource("https://www.rt.com/rss/news/", source="Russia Today", bias_tag="Pro Russia"),
-        schema=InputSchema, 
-        name="RT RSS Feed", 
-        max_backlog_size=10
-    )
-   
-    # South China Morning Post: pro-China business/politics coverage
-    t_rss_china = pw.io.python.read(
-        RssSource("https://www.scmp.com/rss/318199/feed/", source="SCMP", bias_tag="Pro China"),
-        schema=InputSchema, 
-        name="SCMP RSS Feed", 
-        max_backlog_size=10
-    )
+    # Dynamically load feeds from data/rss_feeds.csv
+    try:
+        csv_path = os.path.join(os.path.dirname(__file__), "..", "data", "rss_feeds.csv")
+        df_rss = pd.read_csv(csv_path)
+        rss_tables = []
+        
+        for _, row in df_rss.iterrows():
+            name = row.get("source", "Unknown RSS")
+            rss_tables.append(
+                pw.io.python.read(
+                    RssSource(
+                        url=row["url"], 
+                        source=name, 
+                        bias_tag=row.get("bias", "Neutral")
+                    ),
+                    schema=InputSchema, 
+                    name=f"{name} Feed",
+                    max_backlog_size=10
+                )
+            )
 
-    # New York Times: Western/US-aligned coverage
-    t_rss_us = pw.io.python.read(
-        RssSource("https://rss.nytimes.com/services/xml/rss/nyt/World.xml", source="NYTimes", bias_tag="US/Western"),
-        schema=InputSchema, 
-        name="NYTimes RSS Feed",
-        max_backlog_size=10
-    )
+        # Merge all RSS tables if any exist
+        if rss_tables:
+            t_rss_combined = rss_tables[0]
+            if len(rss_tables) > 1:
+                t_rss_combined = t_rss_combined.concat_reindex(*rss_tables[1:])
+        else:
+            # Fallback if CSV is empty
+            print("⚠️ No RSS feeds found in CSV.")
+            t_rss_combined = None
 
-    # BBC: UK/Western coverage
-    t_rss_uk = pw.io.python.read(
-        RssSource("https://feeds.bbci.co.uk/news/world/rss.xml", source="BBC", bias_tag="UK/Western"),
-        schema=InputSchema, 
-        name="BBC RSS Feed",
-        max_backlog_size=10
-    )
+    except Exception as e:
+        print(f"⚠️ Failed to load RSS feeds from CSV: {e}")
+        t_rss_combined = None
     
     # ========== SOURCE 3: TELEGRAM ==========
     # Real-time messaging from curated channels
@@ -133,12 +137,15 @@ def get_data_stream():
     )
 
     # ========== MERGE RSS FEEDS ==========
-    # Combine all RSS sources into single table
-    t_rss_combined = t_rss_russia.concat_reindex(t_rss_china, t_rss_us, t_rss_uk)    
+    # (Already handled above in SOURCE 2)
     
     # ========== FINAL MERGE: ALL SOURCES ==========
     # Combine News, Reddit, RSS, and Telegram into unified stream
-    combined_stream = t_news.concat_reindex(t_reddit, t_rss_combined, t_telegram)
+    streams = [t_news, t_reddit, t_telegram]
+    if t_rss_combined:
+        streams.append(t_rss_combined)
+        
+    combined_stream = streams[0].concat_reindex(*streams[1:])
  
     return combined_stream
 

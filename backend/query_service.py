@@ -86,7 +86,7 @@ def build_query_service(document_store: DocumentStore):
 
     # ── Stage 6: LLM inference ────────────────────────────────────────
     model = llms.OpenAIChat(
-        model="meta-llama/llama-3.3-70b-instruct:free",
+        model="openrouter/free", # Match the new model here
         api_key=os.environ.get("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
         temperature=0.0,

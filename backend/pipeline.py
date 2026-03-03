@@ -22,7 +22,9 @@ from data_registry import get_data_stream
 from stream_writer import start_stream_writer
 from rag_pipeline import build_rag_pipeline
 from query_service import build_query_service
+from dotenv import load_dotenv # <-- Add this
 
+load_dotenv()
 
 def run() -> None:
     """Assemble and launch the full intelligence pipeline.

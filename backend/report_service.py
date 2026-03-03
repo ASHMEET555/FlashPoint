@@ -33,9 +33,7 @@ _client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     base_url="https://openrouter.ai/api/v1",
 )
-_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
-
-
+_MODEL = "openrouter/free"
 # ── Prompt template ───────────────────────────────────────────────────
 _PROMPT_TEMPLATE = """\
 TASK: Synthesize the provided 'Raw Intel' into a professional intelligence briefing.
@@ -45,6 +43,7 @@ CONSTRAINTS:
 2. Tone: Objective, journalistic, concise.
 3. Cite the source name in brackets [Source] after every claim.
 4. Reply in **Markdown only**. Use ##, ###, -, and **bold** formatting freely.
+5. USE ASCII CHARACTERS ONLY. DO NOT USE UNICODE CHARACTERS.
 
 RAW INTEL:
 {context}
@@ -135,6 +134,28 @@ class _SitrepPDF(FPDF):
         self.cell(0, 6, f"FLASHPOINT SITREP  |  Page {self.page_no()}/{{nb}}  |  DO NOT DISTRIBUTE", align="C")
 
 
+def _safe(text: str) -> str:
+    """Transliterate common unicode chars to ASCII equivalents for fpdf latin-1."""
+    _UNICODE_MAP = str.maketrans({
+        "\u2014": "--",   # em dash  —
+        "\u2013": "-",    # en dash  –
+        "\u2012": "-",    # figure dash
+        "\u2010": "-",    # hyphen
+        "\u2018": "'",    # left single quote  '
+        "\u2019": "'",    # right single quote '
+        "\u201c": '"',    # left double quote  "
+        "\u201d": '"',    # right double quote "
+        "\u2022": "*",    # bullet  •
+        "\u00b7": ".",    # middle dot
+        "\u2026": "...",  # ellipsis  …
+        "\u00a0": " ",    # non-breaking space
+        "\u2011": "-",    # non-breaking hyphen
+    })
+    text = text.translate(_UNICODE_MAP)
+    # Drop anything still outside latin-1 (0x00-0xFF)
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
     """Walk the Markdown token stream and render into the FPDF canvas."""
     # Strip fenced code fences (unlikely in SITREP but defensive)
@@ -146,7 +167,7 @@ def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
         # H2 heading  →  cyan bold section heading + underline
         if line.startswith("## "):
             pdf.ln(3)
-            heading = line[3:].strip().upper()
+            heading = _safe(line[3:].strip().upper())
             pdf.set_font("Courier", "B", 10)
             pdf.set_text_color(*_CYAN)
             pdf.cell(0, 6, heading, ln=True)
@@ -158,7 +179,7 @@ def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
 
         # H3 heading  →  grey bold sub-heading
         if line.startswith("### "):
-            heading = line[4:].strip()
+            heading = _safe(line[4:].strip())
             pdf.set_font("Courier", "B", 9)
             pdf.set_text_color(*_GREY)
             pdf.cell(0, 5, heading, ln=True)
@@ -169,10 +190,11 @@ def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
         if re.match(r"^[-*]\s+", line):
             text = re.sub(r"^[-*]\s+", "", line)
             text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)   # strip bold markers
+            text = _safe(text)
             pdf.set_font("Courier", "", 8.5)
             pdf.set_text_color(*_WHITE)
             pdf.set_x(18)
-            pdf.multi_cell(0, 4.5, f"•  {text}")
+            pdf.multi_cell(0, 4.5, f"*  {text}")
             continue
 
         # Blank line
@@ -184,6 +206,7 @@ def _md_to_pdf(pdf: FPDF, md_text: str) -> None:
         text = re.sub(r"\*\*(.+?)\*\*", r"\1", line)   # bold
         text = re.sub(r"\*(.+?)\*",     r"\1", text)   # italic
         text = re.sub(r"`(.+?)`",       r"\1", text)   # inline code
+        text = _safe(text)
         pdf.set_font("Courier", "", 8.5)
         pdf.set_text_color(*_WHITE)
         pdf.set_x(14)
@@ -213,7 +236,7 @@ def generate_pdf_bytes(news_buffer: Iterable[dict[str, Any]]) -> bytes:
         pdf.set_font("Courier", "", 8)
         pdf.set_text_color(*_WHITE)
         for src, cnt in counts.most_common():
-            pdf.cell(0, 4, f"  •  {src}  ({cnt})", ln=True)
+            pdf.cell(0, 4, _safe(f"  *  {src}  ({cnt})"), ln=True)
         pdf.ln(5)
 
     # Render the Markdown body

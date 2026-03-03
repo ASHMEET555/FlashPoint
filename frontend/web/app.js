@@ -61,44 +61,6 @@ updateClock();
 
 
 /* ═══════════════════════════════════════════════════════════════
-   STEP 5 — ROLLING BIAS METER (last 50 items)
-════════════════════════════════════════════════════════════════ */
-function calculateBalance(items) {
-  const window = items.slice(-50);          // rolling 50-item window
-  const total  = window.length;
-  if (!total) return { west:33, neutral:34, east:33 };
-
-  const westCount    = window.filter(i => /Western|US\/|UK\/|NATO/i.test(i.bias||"")).length;
-  const eastCount    = window.filter(i => /Russia|China|State-Media\s*\(RU\)|State-Media\s*\(CN\)/i.test(i.bias||"")).length;
-  const neutralCount = total - westCount - eastCount;
-
-  return {
-    west:    Math.round((westCount    / total) * 100),
-    neutral: Math.round((neutralCount / total) * 100),
-    east:    Math.round((eastCount    / total) * 100),
-  };
-}
-
-function updateBalanceBar() {
-  const { west, neutral, east } = calculateBalance(feedItems);
-
-  document.getElementById("bar-west").style.width    = `${west}%`;
-  document.getElementById("bar-neutral").style.width = `${neutral}%`;
-  document.getElementById("bar-east").style.width    = `${east}%`;
-
-  document.getElementById("bar-west").textContent    = west    > 6 ? `${west}%`    : "";
-  document.getElementById("bar-neutral").textContent = neutral > 6 ? `${neutral}%` : "";
-  document.getElementById("bar-east").textContent    = east    > 6 ? `${east}%`    : "";
-
-  const el = document.getElementById("marquee-narration");
-  if (!el) return;
-  if      (west - east > 25 || west > 55)  el.textContent = "WEST";
-  else if (east - west > 25 || east > 55)  el.textContent = "EAST";
-  else                                      el.textContent = "STABLE";
-}
-
-
-/* ═══════════════════════════════════════════════════════════════
    STEP 4 — LIVE FEED via SSE (newest at top)
 ════════════════════════════════════════════════════════════════ */
 function biasClass(bias) {
@@ -145,7 +107,6 @@ function initFeedSSE() {
         feedItems.push(item);
         prependFeedCard(item);
         accumulateLocation(item);
-        updateBalanceBar();
         updateMapMarkers();
       }, i * 400);
     });
@@ -161,7 +122,6 @@ function initFeedSSE() {
       feedItems.push(item);
       prependFeedCard(item);
       accumulateLocation(item);
-      updateBalanceBar();
       updateMapMarkers();
     } catch (_) { /* malformed JSON — ignore */ }
   };
@@ -396,16 +356,26 @@ document.getElementById("chat-form").addEventListener("submit", async (e) => {
         const { done, value } = await reader.read();
         if (done) break;
         let backendError = null;
-      try {
-        const obj = JSON.parse(payload);
-        if (obj.token) {
-          full += obj.token;
-          thinkBubble.textContent = full;
-          document.getElementById("chat-history").scrollTop = 9999;
-        }
-        if (obj.error) backendError = obj.error;
-      } catch (_) { /* non-JSON line */ }
-
+    for (const line of lines) {
+  if (!line.startsWith("data: ")) continue;
+  const payload = line.slice(6).trim();
+  if (payload === "[DONE]") break;
+  
+  let streamError = null; // Extract error variable outside the try block
+  
+  try {
+    const obj = JSON.parse(payload);
+    if (obj.token) {
+      full += obj.token;
+      thinkBubble.textContent = full;
+      document.getElementById("chat-history").scrollTop = 9999;
+    }
+    if (obj.error) streamError = obj.error; // Assign it instead of throwing
+  } catch (_) { /* non-JSON line */ }
+  
+  // Throw the error OUTSIDE the try/catch block so the UI handles it
+  if (streamError) throw new Error(streamError);
+}
 // Throw the error outside the try/catch block so the outer catch can handle it
 if (backendError) throw new Error(backendError);
         buf += decoder.decode(value, { stream: true });
