@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FLASHPOINT — Theme Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #04060a;
+      font-family: 'JetBrains Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .labels {
+      display: flex;
+      flex-shrink: 0;
+    }
+
+    .label {
+      flex: 1;
+      text-align: center;
+      padding: 7px 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .label-0 { background: #060b10; color: #00e5ff; border-bottom: 2px solid #00e5ff; }
+    .label-1 { background: #0a0404; color: #e03030; border-bottom: 3px solid #cc1111; }
+    .label-2 { background: #100820; color: #c9a84c; border-bottom: 2px solid #5a3d8a; }
+    .label-3 { background: #060e18; color: #7eb8d4; border-bottom: 2px solid #2d5f7a; }
+
+    .frames {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    iframe {
+      flex: 1;
+      border: none;
+      border-right: 1px solid #111;
+      min-width: 0;
+    }
+
+    iframe:last-child { border-right: none; }
+  </style>
+</head>
+<body>
+
+  <div class="labels">
+    <div class="label label-0">INTEL COMMAND — CURRENT</div>
+    <div class="label label-1">REDACTED — CLASSIFIED DOC</div>
+    <div class="label label-2">OBSIDIAN COURT — PURPLE</div>
+    <div class="label label-3">COLD FRONT — BLUE</div>
+  </div>
+
+  <div class="frames">
+    <iframe id="f0" title="Intel Command"></iframe>
+    <iframe id="f1" title="Redacted"></iframe>
+    <iframe id="f2" title="Obsidian Court"></iframe>
+    <iframe id="f3" title="Cold Front"></iframe>
+  </div>
+
+  <script>
+    const THEMES = [
+      { id: 'f0', css: '../web/styles.css' },
+      { id: 'f1', css: 'theme-redacted.css' },
+      { id: 'f2', css: 'theme-purple.css' },
+      { id: 'f3', css: 'theme-blue.css' },
+    ];
+
+    fetch('../web/index.html')
+      .then(r => r.text())
+      .then(html => {
+        THEMES.forEach(({ id, css }) => {
+          const patched = html.replace(/href="styles\.css"/, `href="${css}"`);
+          document.getElementById(id).srcdoc = patched;
+        });
+      });
+  </script>
+
+</body>
+</html>

@@ -1,179 +1,274 @@
-"""FastAPI Backend Service for FlashPoint Intelligence Engine
+"""FastAPI Application — Route Definitions Only
 
 Responsibilities:
-- Receives real-time event stream from Pathway (news, Reddit, Telegram, RSS)
-- Serves events to frontend dashboard via polling
-- Generates intelligence reports using Google Gemini API
-- Extracts geolocation data from events for mapping visualization
+- Mount the static HTML/CSS/JS frontend at  /
+- Ingest the Pathway event stream           POST /v1/stream
+- Push new events to browsers               GET  /v1/feed/stream  (SSE)
+- Serve live feed snapshot                  GET  /v1/frontend/feed
+- Trigger SITREP generation                 GET  /v1/generate_report
+- SSE-streaming LLM chat                    POST /v1/chat
+- Health check                              GET  /health
+
+All business logic lives in dedicated service modules:
+  geo_extractor  — spaCy NER + Nominatim geocoding
+  report_service — Gemini SITREP generation
 """
 
-from fastapi import FastAPI, Request
+from __future__ import annotations
 
-import uvicorn
-from typing import Dict, Any
+import asyncio
+import json
+import logging
 from collections import deque
-import google.generativeai as genai
-from dotenv import load_dotenv
-import os
+from pathlib import Path
+from typing import Any, AsyncGenerator, Dict, List
 
-# Load environment variables from .env file
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+import httpx
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-# ========== GEOLOCATION REFERENCE DATA ==========
-# Mapping of place names to geographic coordinates
-# Used to extract lat/lon from event text for map visualization
-GEO_LOCATIONS = {
-    "Kyiv": {"lat": 50.4501, "lon": 30.5234},
-    "Ukraine": {"lat": 48.3794, "lon": 31.1656},
-    "Moscow": {"lat": 55.7558, "lon": 37.6173},
-    "Russia": {"lat": 61.5240, "lon": 105.3188},
-    "Washington": {"lat": 38.9072, "lon": -77.0369},
-    "USA": {"lat": 37.0902, "lon": -95.7129},
-    "Beijing": {"lat": 39.9042, "lon": 116.4074},
-    "China": {"lat": 35.8617, "lon": 104.1954},
-    "Gaza": {"lat": 31.5, "lon": 34.466},
-    "Israel": {"lat": 31.0461, "lon": 34.8516},
-    "Taiwan": {"lat": 23.6978, "lon": 120.9605},
-    "London": {"lat": 51.5074, "lon": -0.1278},
-    "Tehran": {"lat": 35.6892, "lon": 51.3890},
-    "Iran": {"lat": 32.4279, "lon": 53.6880},
-    "Delhi": {"lat": 28.6139, "lon": 77.2090},
-    "India": {"lat": 20.5937, "lon": 78.9629},
-}
+from geo_extractor import extract_location
+from report_service import generate_pdf_bytes, generate_sitrep
 
+logger = logging.getLogger(__name__)
 
+# ── App ───────────────────────────────────────────────────────────────
+app = FastAPI(title="FlashPoint Intel API", version="1.0.0")
 
-def extract_location(text):
-    """Extract geolocation coordinates from event text via keyword matching
-    
-    Strategy: Simple string matching against known place names
-    - Case-insensitive matching
-    - Returns first match found
-    - Suitable for rapid preprocessing in high-throughput scenarios
-    
-    Args:
-        text (str): Event text (title + description)
-    
-    Returns:
-        dict or None: {"lat": float, "lon": float} if location found, else None
-    """
-    if not text:
-        return None
-    
-    # Perform keyword matching against geolocation reference data
-    for place, coords in GEO_LOCATIONS.items():
-        if place in text or place.lower() in text.lower():
-            return coords
-    return None
+# Allow the frontend (any origin during dev) to call the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── In-memory event buffer ────────────────────────────────────────────
+# Circular buffer — last 100 events from Pathway.
+latest_news: deque[Dict[str, Any]] = deque(maxlen=100)
+
+# SSE subscriber queues — one asyncio.Queue per connected browser tab.
+_sse_subscribers: List[asyncio.Queue] = []
 
 
-# ========== GEMINI AI SETUP ==========
-# Configure Google Generative AI for intelligence report generation
-genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel('gemini-flash-latest')
+def _broadcast(event: Dict[str, Any]) -> None:
+    """Push a new event to every active SSE subscriber queue."""
+    dead = []
+    for q in _sse_subscribers:
+        try:
+            q.put_nowait(event)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        _sse_subscribers.remove(q)
 
-# ========== FASTAPI APPLICATION SETUP ==========
-app = FastAPI()
 
-# ========== IN-MEMORY EVENT BUFFER ==========
-# Stores recent events from Pathway (FIFO, max 100 items)
-# Enables frontend polling to retrieve latest updates
-latest_news = deque(maxlen=100)
+# ── Static frontend ───────────────────────────────────────────────────
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "web"
+_ASSETS_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "assets"
 
-@app.get("/")
-def read_root():
-    """Health check endpoint - confirms API is running"""
-    return {"status": "Flashpoint Receiver Online"}
 
-# ========== EVENT INGESTION ENDPOINT ==========
-@app.post("/v1/stream")
+# ── Routes ────────────────────────────────────────────────────────────
+
+@app.get("/health", tags=["meta"])
+def health():
+    """Liveness probe."""
+    return {"status": "online", "buffer_size": len(latest_news)}
+
+
+@app.post("/v1/stream", tags=["pipeline"])
 async def receive_stream(data: Dict[str, Any]):
-    """Receive structured events from Pathway data pipeline
-    
-    Flow:
-    1. Extract geolocation from event text if present
-    2. Augment event with lat/lon coordinates
-    3. Store in memory buffer for frontend polling
-    
-    Args:
-        data: Event dict with keys [source, text, url, timestamp, bias]
-    
-    Returns:
-        dict: Acknowledgment with event count in buffer
-    """
-    # Attempt geolocation extraction for map visualization
-    coords = extract_location(data['text'])
-    if coords:
-        # Augment event with geographic coordinates
-        data["lat"] = coords["lat"]
-        data["lon"] = coords["lon"]
-            
-    # Append to circular buffer (auto-evicts oldest if full)
-    latest_news.append(data)
-       
-    return {"status": "received", "count": len(data)}
+    """Ingest a structured event POSTed by the Pathway pipeline.
 
-# ========== EVENT POLLING ENDPOINT ==========
-@app.get("/v1/frontend/feed")
-def get_feed():
-    """Provide event stream to frontend dashboard via polling
-    
-    Frontend periodically calls this to fetch new events
-    Returns entire buffer contents (frontend handles display logic)
-    
-    Returns:
-        list: Array of event dicts sorted by ingestion order (oldest first)
+    Enriches with geolocation, stores in buffer, and broadcasts to all
+    active SSE subscribers so the browser updates instantly.
     """
+    text = data.get("text", "")
+
+    geo = extract_location(text)
+    if geo:
+        data.setdefault("lat",   geo["lat"])
+        data.setdefault("lon",   geo["lon"])
+        data.setdefault("place", geo["place"])
+
+    latest_news.append(data)
+    _broadcast(data)
+    return {"status": "received", "buffer_size": len(latest_news)}
+
+
+async def _sse_generator(queue: asyncio.Queue) -> AsyncGenerator[str, None]:
+    """Yield SSE-formatted messages from the subscriber queue forever."""
+    # Send current buffer as a snapshot on connect
+    for item in latest_news:
+        yield f"data: {json.dumps(item)}\n\n"
+
+    while True:
+        try:
+            event = await asyncio.wait_for(queue.get(), timeout=25)
+            yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.TimeoutError:
+            # Keep-alive comment so proxies/browsers don't drop the connection
+            yield ": keep-alive\n\n"
+
+
+@app.get("/v1/feed/stream", tags=["frontend"])
+async def feed_stream(request: Request):
+    """Server-Sent Events endpoint — browser subscribes once and receives
+    every new event pushed by Pathway in real time.
+    """
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+    _sse_subscribers.append(queue)
+
+    async def cleanup():
+        if queue in _sse_subscribers:
+            _sse_subscribers.remove(queue)
+
+    async def event_stream():
+        try:
+            async for chunk in _sse_generator(queue):
+                if await request.is_disconnected():
+                    break
+                yield chunk
+        finally:
+            await cleanup()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # Disable nginx buffering
+        },
+    )
+
+
+@app.get("/v1/frontend/feed", tags=["frontend"])
+def get_feed():
+    """Snapshot of the current buffer — used for initial page load."""
     return list(latest_news)
 
-# ========== INTELLIGENCE REPORT GENERATION ==========
-@app.get("/v1/generate_report")
-def generate_report():
-    """Generates a formal intelligence briefing on a topic.
 
-    Returns:
-        dict: {"report": str} - Formatted SITREP from LLM
+@app.get("/v1/generate_report", tags=["intel"])
+async def generate_report():
+    """Generate a SITREP from the current buffer via OpenRouter."""
+    if not latest_news:
+        raise HTTPException(status_code=400, detail="No intelligence data in buffer yet.")
+    try:
+        items = list(latest_news)
+        loop  = asyncio.get_event_loop()
+        report = await loop.run_in_executor(None, generate_sitrep, items)
+    except Exception as exc:
+        logger.exception("Report generation failed")
+        raise HTTPException(status_code=503, detail=f"Report generation failed: {exc}") from exc
+    return {"report": report}
+
+
+@app.get("/v1/generate_report/pdf", tags=["intel"])
+async def generate_report_pdf():
+    """Generate a SITREP and return it as a downloadable PDF file."""
+    if not latest_news:
+        raise HTTPException(status_code=400, detail="No intelligence data in buffer yet.")
+    try:
+        items     = list(latest_news)
+        loop      = asyncio.get_event_loop()
+        pdf_bytes = await loop.run_in_executor(None, generate_pdf_bytes, items)
+    except Exception as exc:
+        logger.exception("PDF generation failed")
+        raise HTTPException(status_code=503, detail=f"PDF generation failed: {exc}") from exc
+
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    filename = f"SITREP_{ts}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── Chat endpoint ─────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[Dict[str, str]] = []
+
+
+@app.post("/v1/chat", tags=["intel"])
+async def chat(req: ChatRequest):
+    """Proxy user message to the Pathway RAG query service (port 8011).
+
+    The RAG pipeline does retrieval over the live document store, builds
+    a context-grounded prompt, and runs LLM inference via OpenRouter.
+    The result is returned as an SSE stream of token chunks so the
+    frontend typing effect works unchanged.
     """
+    PATHWAY_QUERY_URL = "http://localhost:8011/v1/query"
 
-    # 2. Prompt for Report Format
+    async def token_stream() -> AsyncGenerator[str, None]:
+        try:
+            # Pathway's webserver closes the connection after sending the
+            # response body (HTTP/1.0 style), which makes httpx raise
+            # RemoteProtocolError even though the full body was received.
+            # Use a raw stream request so we can read whatever bytes arrived.
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                try:
+                    async with client.stream(
+                        "POST",
+                        PATHWAY_QUERY_URL,
+                        json={"messages": req.message},
+                    ) as resp:
+                        raw = await resp.aread()
+                except httpx.RemoteProtocolError as e:
+                    # Connection closed after body sent — still try to use
+                    # whatever was buffered in the response object
+                    raw = getattr(e, "response", None)
+                    raw = raw.content if raw else b""
 
-    context_text = "\n".join([f"- {d['text']}-{d['source']}-{d['bias']}" for d in latest_news])
-    prompt = f""" TASK: Synthesize the provided 'Raw Intel' into a professional News Briefing. 
-        CONSTRAINTS:
-        1. Use ONLY the provided text below. Do NOT fill in missing data like names, dates, or events not present.
-        2. Tone: Objective, Journalistic, Concise.
-        3. Cite the source name in brackets [Source] for every claim.
-        4. Reply in plain text, do not give response in markdown
-    
-        RAW INTEL:
-        {context_text}
-    
-        REQUIRED OUTPUT FORMAT:
-        ##  Global Situation Summary
-        [Write a 2-3 sentence executive summary of the provided text]
+                if not raw:
+                    yield f"data: {json.dumps({'error': 'Empty response from RAG pipeline'})}\n\n"
+                    return
 
-        ## Key Developments
-        - **[Category/Region]**: [Detail] [Source]
-        - **[Category/Region]**: [Detail] [Source]
-    
-        ## Outlook
-        [Short forecast based *only* on the provided trends]
-    """
-    
-    # Query Gemini to generate structured report
-    response = gemini_model.generate_content(prompt)
-    
-    # Return formatted response
-    return {"report": response.text}
+                try:
+                    data   = json.loads(raw)
+                    answer = data.get("result", "") if isinstance(data, dict) else str(data)
+                except Exception:
+                    answer = raw.decode("utf-8", errors="replace")
+
+                if not answer:
+                    answer = "No relevant intelligence found in the document store."
+
+                # Stream word-by-word so the frontend typing effect fires
+                for word in answer.split(" "):
+                    yield f"data: {json.dumps({'token': word + ' '})}\n\n"
+                    await asyncio.sleep(0.01)
+
+        except httpx.HTTPStatusError as exc:
+            logger.error("Pathway query service error: %s", exc)
+            yield f"data: {json.dumps({'error': f'RAG service error: {exc.response.status_code}'})}\n\n"
+        except httpx.ConnectError:
+            yield f"data: {json.dumps({'error': 'Pipeline not running — start pipeline.py first'})}\n\n"
+        except Exception as exc:
+            logger.exception("Chat proxy error")
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        token_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
+# ── Static mount (must be LAST — catches everything else) ─────────────
+if _ASSETS_DIR.is_dir():
+    app.mount("/assets",  StaticFiles(directory=str(_ASSETS_DIR)),  name="assets")
+if _FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
+else:
+    logger.warning("Frontend dir not found at %s — static serving disabled.", _FRONTEND_DIR)
 
-if __name__ == "__main__":
-    """Entry point: Start FastAPI server
-    
-    Configuration:
-    - Host: 0.0.0.0 (listen on all interfaces)
-    - Port: 8000 (Pathway writes to /v1/stream, frontend polls /v1/frontend/feed)
-    """
-    uvicorn.run(app, host="0.0.0.0", port=8000)
