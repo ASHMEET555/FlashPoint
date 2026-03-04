@@ -19,6 +19,7 @@ from connectors.sim_src import SimulationSource
 from connectors.rss_src import RssSource
 import os
 from dotenv import load_dotenv
+from connectors.acled_src import AcledSource
 
 # Load credentials from .env file
 load_dotenv()  # This loads the variables from .env
@@ -29,6 +30,8 @@ TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ACLED_API_KEY = os.getenv("ACLED_API_KEY")
+ACLED_EMAIL = os.getenv("ACLED_EMAIL")
 
 
 # ========== UNIFIED INPUT SCHEMA ==========
@@ -100,6 +103,10 @@ def get_data_stream():
                 )
             )
 
+        
+    
+
+    
         # Merge all RSS tables if any exist
         if rss_tables:
             t_rss_combined = rss_tables[0]
@@ -135,13 +142,17 @@ def get_data_stream():
         name="Reddit Source", 
         max_backlog_size=10
     )
-
+    t_acled=pw.io.python.read(
+        AcledSource(api_key=ACLED_API_KEY,email=ACLED_EMAIL,polling_interval=3600),
+        schema=InputSchema,
+        name="ACLED Source",
+        max_backlog_size=10)    
     # ========== MERGE RSS FEEDS ==========
     # (Already handled above in SOURCE 2)
     
     # ========== FINAL MERGE: ALL SOURCES ==========
     # Combine News, Reddit, RSS, and Telegram into unified stream
-    streams = [t_news, t_reddit, t_telegram]
+    streams = [t_news, t_reddit, t_telegram, t_acled]
     if t_rss_combined:
         streams.append(t_rss_combined)
         
