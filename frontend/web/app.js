@@ -14,12 +14,15 @@ const SSE_FEED_URL  = `${API_BASE}/v1/feed/stream`;
 const CHAT_URL      = `${API_BASE}/v1/chat`;
 const REPORT_URL    = `${API_BASE}/v1/generate_report`;
 const REPORT_PDF_URL = `${API_BASE}/v1/generate_report/pdf`;
+const COMMODITY_URL  = `${API_BASE}/api/commodities/latest`;
+const CONFLICTS_URL  = `${API_BASE}/api/conflicts/all`;
 
 // ── State ─────────────────────────────────────────────────────────────
 let feedItems    = [];              // Full ordered array, newest last
 let chatMessages = [];              // {role, content}
 let latestReport = null;
 let map, markerLayer;
+let conflictMarkers = [];           // Store conflict markers for updates
 
 // Hotspot frequency counter: place → count
 const locationFreq = {};
@@ -411,7 +414,178 @@ if (backendError) throw new Error(backendError);
 
 
 /* ═══════════════════════════════════════════════════════════════
+   COMMODITY PRICES
+════════════════════════════════════════════════════════════════ */
+
+const COMMODITY_NAMES = {
+  "XAU": "Gold",
+  "XAG": "Silver",
+  "WTIOIL-FUT": "WTI Crude",
+  "BRENTOIL-FUT": "Brent Crude"
+};
+
+let lastCommodityData = null;
+
+async function fetchCommodityPrices() {
+  try {
+    const response = await fetch(COMMODITY_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    lastCommodityData = data;
+    
+    renderCommodityPrices(data);
+  } catch (err) {
+    console.error("Commodity fetch error:", err);
+    document.getElementById("commodity-grid").innerHTML = 
+      '<div class="commodity-loading" style="color:#ff3366;">⚠️ Failed to load prices</div>';
+  }
+}
+
+function renderCommodityPrices(data) {
+  const grid = document.getElementById("commodity-grid");
+  const footer = document.getElementById("commodity-footer");
+  
+  if (!data.success || !data.prices) {
+    grid.innerHTML = '<div class="commodity-loading">No data available</div>';
+    return;
+  }
+  
+  const prices = data.prices;
+  let html = "";
+  
+  for (const [symbol, info] of Object.entries(prices)) {
+    const name = COMMODITY_NAMES[symbol] || symbol;
+    const rate = parseFloat(info.rate || 0);
+    const unit = info.unit || "USD";
+    const change = parseFloat(info.change_24h || 0);
+    
+    // Determine change direction
+    let changeClass = "neutral";
+    let changeIcon = "●";
+    if (change > 0.5) {
+      changeClass = "up";
+      changeIcon = "▲";
+    } else if (change < -0.5) {
+      changeClass = "down";
+      changeIcon = "▼";
+    }
+    
+    const changeText = change !== 0 
+      ? `${changeIcon} ${change > 0 ? "+" : ""}${change.toFixed(2)}%` 
+      : "● No change";
+    
+    html += `
+      <div class="commodity-card">
+        <div class="commodity-name">${name}</div>
+        <div class="commodity-price">$${rate.toFixed(2)}</div>
+        <div class="commodity-change ${changeClass}">${changeText}</div>
+        <div class="commodity-meta">${unit} • ${symbol}</div>
+      </div>
+    `;
+  }
+  
+  grid.innerHTML = html;
+  
+  // Update footer
+  const lastUpdate = data.metadata?.cache_time 
+    ? new Date(data.metadata.cache_time).toLocaleTimeString('en-US', { hour12: false })
+    : "Unknown";
+  
+  const cacheStatus = data.metadata?.from_cache ? "CACHED" : "LIVE";
+  const cacheColor = data.metadata?.from_cache ? "#ffd700" : "#00ff88";
+  
+  footer.innerHTML = `
+    <span class="text-muted" style="font-size:0.7rem;">
+      Last: ${lastUpdate} • 
+      <span style="color:${cacheColor}">●</span> ${cacheStatus}
+    </span>
+  `;
+}
+
+// Poll commodities every 5 minutes
+setInterval(fetchCommodityPrices, 5 * 60 * 1000);
+
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFLICT MARKERS
+════════════════════════════════════════════════════════════════ */
+
+async function fetchConflicts() {
+  try {
+    const response = await fetch(CONFLICTS_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    
+    if (data.success && data.conflicts) {
+      renderConflictMarkers(data.conflicts);
+    }
+  } catch (err) {
+    console.error("Conflicts fetch error:", err);
+  }
+}
+
+function renderConflictMarkers(conflicts) {
+  if (!map) return;
+  
+  // Clear existing conflict markers
+  conflictMarkers.forEach(marker => marker.remove());
+  conflictMarkers = [];
+  
+  conflicts.forEach(conflict => {
+    if (!conflict.coordinates?.lat || !conflict.coordinates?.lng) return;
+    
+    const { lat, lng } = conflict.coordinates;
+    const severity = conflict.severity || 5;
+    const impact = conflict.impact || "Limited";
+    
+    // Color by impact
+    let color = "#00ff88"; // Green for Limited
+    if (impact === "Critical") color = "#ff3366";
+    else if (impact === "Significant") color = "#ffd700";
+    
+    // Size by severity (1-10 scale)
+    const radius = 5 + (severity * 2);
+    
+    // Create circle marker
+    const marker = L.circleMarker([lat, lng], {
+      radius: radius,
+      fillColor: color,
+      color: "#1a1a1a",
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.7
+    });
+    
+    // Popup content
+    const popupContent = `
+      <div style="min-width:200px;">
+        <strong style="color:#cc0000;">${conflict.name}</strong><br/>
+        <span style="color:#555;">Status:</span> ${conflict.status}<br/>
+        <span style="color:#555;">Impact:</span> <strong>${impact}</strong><br/>
+        <span style="color:#555;">Severity:</span> ${severity}/10<br/>
+        ${conflict.description ? `<p style="margin-top:8px; font-size:0.7rem;">${conflict.description}</p>` : ""}
+      </div>
+    `;
+    
+    marker.bindPopup(popupContent);
+    marker.addTo(map);
+    
+    conflictMarkers.push(marker);
+  });
+  
+  console.log(`✅ Rendered ${conflicts.length} conflict markers`);
+}
+
+// Poll conflicts every 5 minutes
+setInterval(fetchConflicts, 5 * 60 * 1000);
+
+
+/* ═══════════════════════════════════════════════════════════════
    BOOT
 ════════════════════════════════════════════════════════════════ */
+fetchCommodityPrices();  // Initial fetch
+fetchConflicts();        // Initial fetch
 initFeedSSE();
 

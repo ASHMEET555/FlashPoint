@@ -12,6 +12,9 @@ All sources normalized into unified InputSchema for downstream processing.
 
 import pathway as pw
 import pandas as pd
+import json
+from datetime import datetime
+from pathlib import Path
 from connectors.telegram_src import TelegramSource
 from connectors.reddit_src import RedditSource
 from connectors.news_src import NewsSource
@@ -19,7 +22,6 @@ from connectors.sim_src import SimulationSource
 from connectors.rss_src import RssSource
 import os
 from dotenv import load_dotenv
-from connectors.acled_src import AcledSource
 
 # Load credentials from .env file
 load_dotenv()  # This loads the variables from .env
@@ -29,9 +31,39 @@ NEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.getenv("TELEGRAM_PHONE")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-ACLED_API_KEY = os.getenv("ACLED_API_KEY")
-ACLED_EMAIL = os.getenv("ACLED_EMAIL")
+
+# ========== DATA SOURCES CONFIG ==========
+_CONFIG_PATH = Path(__file__).parent.parent / "data" / "data_sources.json"
+_config_cache = None
+_config_last_load = None
+
+
+def load_data_sources_config(force_reload=False):
+    """Load data sources from JSON config with caching and hot-reload support."""
+    global _config_cache, _config_last_load
+    
+    try:
+        # Check if we need to reload
+        if not force_reload and _config_cache is not None:
+            if _config_last_load and _CONFIG_PATH.exists():
+                mtime = datetime.fromtimestamp(_CONFIG_PATH.stat().st_mtime)
+                if mtime <= _config_last_load:
+                    return _config_cache
+        
+        # Load fresh config
+        with open(_CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+        
+        _config_cache = config
+        _config_last_load = datetime.now()
+        
+        print(f"✅ Loaded data sources config (version {config['config']['version']})")
+        return config
+        
+    except Exception as e:
+        print(f"⚠️ Error loading config: {e}, using fallback")
+        return {"rss_feeds": [], "news_sources": [{"name": "GNews", "enabled": True}], 
+                "reddit_sources": [], "telegram_sources": []}
 
 
 # ========== UNIFIED INPUT SCHEMA ==========
@@ -53,111 +85,124 @@ class InputSchema(pw.Schema):
     bias: str
 
 def get_data_stream():
-    """Build unified multi-source intelligence stream
+    """Build unified multi-source intelligence stream using JSON configuration.
     
-    Process:
-    1. Initialize individual source connectors
-    2. Normalize each to InputSchema
-    3. Concatenate into single Pathway table
-    4. Return combined stream for RAG pipeline
-    
-    Sources:
-    - News API: Global news (60-sec polling interval)
-    - RSS Feeds: State media & Western media (300-sec polling)
-    - Reddit: Public forums (60-sec polling)
-    - Telegram: Real-time channels (streaming mode)
-    
+    Loads sources from data/data_sources.json with hot-reload support.
     Returns:
         Pathway table: Unified event stream [source, text, url, timestamp, bias]
     """
     
+    # Load configuration
+    config = load_data_sources_config()
+    streams = []
+    
     # ========== SOURCE 1: NEWS API ==========
-    # GNews aggregator: collects global news articles
-    # Polling: 60 seconds (hourly API limits apply)
-    t_news = pw.io.python.read(
-        NewsSource(NEWS_API_KEY, query="world", polling_interval=60),
-        schema=InputSchema, 
-        name="NewsAPI Source",
-        max_backlog_size=10  # Buffer max 10 items before processing
-    )
-   
-    # ========== SOURCE 2: RSS FEEDS ==========
-    # Dynamically load feeds from data/rss_feeds.csv
-    try:
-        csv_path = os.path.join(os.path.dirname(__file__), "..", "data", "rss_feeds.csv")
-        df_rss = pd.read_csv(csv_path)
-        rss_tables = []
-        
-        for _, row in df_rss.iterrows():
-            name = row.get("source", "Unknown RSS")
-            rss_tables.append(
-                pw.io.python.read(
-                    RssSource(
-                        url=row["url"], 
-                        source=name, 
-                        bias_tag=row.get("bias", "Neutral")
-                    ),
-                    schema=InputSchema, 
-                    name=f"{name} Feed",
-                    max_backlog_size=10
-                )
+    for news_config in config.get("news_sources", []):
+        if not news_config.get("enabled", True):
+            continue
+        try:
+            t_news = pw.io.python.read(
+                NewsSource(
+                    NEWS_API_KEY, 
+                    query=news_config.get("query", "world"),
+                    polling_interval=news_config.get("polling_interval", 60)
+                ),
+                schema=InputSchema, 
+                name=f"{news_config['name']} Source",
+                max_backlog_size=10
             )
-
-        
+            streams.append(t_news)
+            print(f"✅ Enabled: {news_config['name']}")
+        except Exception as e:
+            print(f"⚠️ Failed to load {news_config['name']}: {e}")
+   
+    # ========== SOURCE 2: RSS FEEDS (JSON-based) ==========
+    rss_tables = []
+    for rss_config in config.get("rss_feeds", []):
+        if not rss_config.get("enabled", True):
+            continue
+        try:
+            t_rss = pw.io.python.read(
+                RssSource(
+                    url=rss_config["url"], 
+                    source=rss_config["name"], 
+                    bias_tag=rss_config.get("bias", "Neutral")
+                ),
+                schema=InputSchema, 
+                name=f"{rss_config['name']} RSS",
+                max_backlog_size=10
+            )
+            rss_tables.append(t_rss)
+            print(f"✅ Enabled: {rss_config['name']} RSS")
+        except Exception as e:
+            print(f"⚠️ Failed to load {rss_config.get('name', 'RSS')}: {e}")
     
-
-    
-        # Merge all RSS tables if any exist
-        if rss_tables:
-            t_rss_combined = rss_tables[0]
-            if len(rss_tables) > 1:
-                t_rss_combined = t_rss_combined.concat_reindex(*rss_tables[1:])
-        else:
-            # Fallback if CSV is empty
-            print("⚠️ No RSS feeds found in CSV.")
-            t_rss_combined = None
-
-    except Exception as e:
-        print(f"⚠️ Failed to load RSS feeds from CSV: {e}")
-        t_rss_combined = None
+    # Merge all RSS feeds
+    if rss_tables:
+        t_rss_combined = rss_tables[0]
+        if len(rss_tables) > 1:
+            t_rss_combined = t_rss_combined.concat_reindex(*rss_tables[1:])
+        streams.append(t_rss_combined)
     
     # ========== SOURCE 3: TELEGRAM ==========
-    # Real-time messaging from curated channels
-    # Streaming mode: receives messages as they arrive (no polling)
-    t_telegram = pw.io.python.read(
-        TelegramSource(api_hash=TELEGRAM_API_HASH, api_id=TELEGRAM_API_ID, phone=TELEGRAM_PHONE),
-        schema=InputSchema,
-        mode="streaming",  # Live event subscription
-        name="Telegram Source",
-        max_backlog_size=10
-    )
+    for tg_config in config.get("telegram_sources", []):
+        if not tg_config.get("enabled", True):
+            continue
+        try:
+            # Extract channel handles and build bias tag dictionary
+            channels = [ch["handle"] for ch in tg_config.get("channels", [])]
+            bias_tags = {ch["handle"]: ch.get("bias", "Independent") 
+                        for ch in tg_config.get("channels", [])}
+            
+            t_telegram = pw.io.python.read(
+                TelegramSource(
+                    api_hash=TELEGRAM_API_HASH, 
+                    api_id=TELEGRAM_API_ID, 
+                    phone=TELEGRAM_PHONE,
+                    channels=channels,
+                    bias_tags=bias_tags,
+                    backfill_limit=tg_config.get("backfill_messages", 20)
+                ),
+                schema=InputSchema,
+                mode="streaming",
+                name="Telegram Source",
+                max_backlog_size=10
+            )
+            streams.append(t_telegram)
+            print(f"✅ Enabled: Telegram ({len(channels)} channels)")
+        except Exception as e:
+            print(f"⚠️ Failed to load Telegram: {e}")
     
     # ========== SOURCE 4: REDDIT ==========
-    # Public forum discussions across relevant subreddits
-    # Streaming mode: monitors new posts
-    t_reddit = pw.io.python.read(
-        RedditSource(),
-        schema=InputSchema,
-        mode="streaming",
-        name="Reddit Source", 
-        max_backlog_size=10
-    )
-    t_acled=pw.io.python.read(
-        AcledSource(api_key=ACLED_API_KEY,email=ACLED_EMAIL,polling_interval=3600),
-        schema=InputSchema,
-        name="ACLED Source",
-        max_backlog_size=10)    
-    # ========== MERGE RSS FEEDS ==========
-    # (Already handled above in SOURCE 2)
-    
-    # ========== FINAL MERGE: ALL SOURCES ==========
-    # Combine News, Reddit, RSS, and Telegram into unified stream
-    streams = [t_news, t_reddit, t_telegram, t_acled]
-    if t_rss_combined:
-        streams.append(t_rss_combined)
+    for reddit_config in config.get("reddit_sources", []):
+        if not reddit_config.get("enabled", True):
+            continue
+        try:
+            t_reddit = pw.io.python.read(
+                RedditSource(
+                    subreddits=reddit_config.get("subreddits", ["worldnews", "geopolitics"]),
+                    post_limit=reddit_config.get("post_limit", 50),
+                    polling_interval=reddit_config.get("polling_interval", 60)
+                ),
+                schema=InputSchema,
+                mode="streaming",
+                name="Reddit Source", 
+                max_backlog_size=10
+            )
+            streams.append(t_reddit)
+            print(f"✅ Enabled: Reddit ({len(reddit_config.get('subreddits', []))} subreddits)")
+        except Exception as e:
+            print(f"⚠️ Failed to load Reddit: {e}")
+
+    # ========== FINAL MERGE ==========
+    if not streams:
+        raise ValueError("No data sources enabled! Check data_sources.json")
         
-    combined_stream = streams[0].concat_reindex(*streams[1:])
+    combined_stream = streams[0]
+    if len(streams) > 1:
+        combined_stream = combined_stream.concat_reindex(*streams[1:])
  
+    print(f"✅ Pipeline ready with {len(streams)} active sources")
     return combined_stream
 
 def get_simulation_stream():

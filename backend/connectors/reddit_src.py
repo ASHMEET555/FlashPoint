@@ -16,15 +16,6 @@ import requests
 import pathway as pw 
 
 
-# ========== COLLECTION PARAMETERS ==========
-# Subreddits monitored (combined using Reddit's multi-subreddit syntax)
-SUBREDDITS = "worldnews+geopolitics+technology+artificialintelligence"
-# Number of newest posts fetched per poll
-SUBREDDITS = "worldnews+geopolitics+news"
-POST_LIMIT = 50
-# Polling interval in seconds (kept conservative to avoid rate limits)
-POLL_INTERVAL = 60  # Seconds (Safe rate limit)
-
 class RedditSource(pw.io.python.ConnectorSubject):
     """
     Pathway-compatible polling connector for Reddit.
@@ -35,6 +26,27 @@ class RedditSource(pw.io.python.ConnectorSubject):
     - Normalizes posts into a unified event format
     - Streams results directly into the Pathway pipeline
     """
+    
+    def __init__(self, subreddits=None, post_limit=50, polling_interval=60):
+        """
+        Initialize the Reddit connector.
+
+        Args:
+            subreddits (list): List of subreddit names to monitor
+            post_limit (int): Number of posts to fetch per poll (default: 50)
+            polling_interval (int): Seconds between polls (default: 60)
+        """
+        super().__init__()
+        # Default subreddits if none provided
+        if subreddits is None:
+            subreddits = ["worldnews", "geopolitics", "news", "breakingnews", 
+                         "politics", "UkrainianConflict"]
+        
+        # Join subreddits with + for multi-subreddit syntax
+        self.subreddits = "+".join(subreddits)
+        self.post_limit = post_limit
+        self.polling_interval = polling_interval
+    
     def run(self):
         """
         Main execution loop.
@@ -45,12 +57,12 @@ class RedditSource(pw.io.python.ConnectorSubject):
         # ========== INITIALIZATION ==========
         seen_ids = set()  # Track ingested post IDs
         # Reddit endpoint for newest posts across selected subreddits
-        url = f"https://www.reddit.com/r/{SUBREDDITS}/new.json?limit={POST_LIMIT}"
+        url = f"https://www.reddit.com/r/{self.subreddits}/new.json?limit={self.post_limit}"
         # Custom User-Agent required by Reddit API rules
         headers = {
             'User-Agent': 'FlashPointEngine/1.0 (Macintosh; Intel Mac OS X 10_15_7)'
         }
-        print(f"📡 [Reddit] Engine started. Monitoring: r/{SUBREDDITS}")
+        print(f"📡 [Reddit] Engine started. Monitoring: r/{self.subreddits}")
         
         # ========== MAIN POLLING LOOP ==========
         while True:
@@ -99,7 +111,7 @@ class RedditSource(pw.io.python.ConnectorSubject):
                                 "text": full_text,
                                 "url": f"https://reddit.com{post.get('permalink')}",
                                 "timestamp": float(post.get('created_utc', 0)),
-                                "bias": "Varied/Unknown"  # Reddit posts have mixed bias
+                                "bias": "Varied"  # Reddit posts have mixed bias
                             }
                             # Emit event into Pathway engine
                             self.next(**row)
@@ -120,5 +132,5 @@ class RedditSource(pw.io.python.ConnectorSubject):
                 print(f"⚠️ [Reddit] Connection Error: {e}")
             
             # Wait before next poll
-            time.sleep(POLL_INTERVAL)
+            time.sleep(self.polling_interval)
 

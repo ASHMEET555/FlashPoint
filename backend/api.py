@@ -32,6 +32,8 @@ from pydantic import BaseModel
 
 from geo_extractor import extract_location
 from report_service import generate_pdf_bytes, generate_sitrep
+from commodity_service import get_commodity_service
+from conflict_service import get_conflict_service
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +264,84 @@ async def chat(req: ChatRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── Commodity Prices API ──────────────────────────────────────────────
+
+@app.get("/api/commodities/latest", tags=["commodities"])
+async def get_commodity_prices(symbols: str = None):
+    """Get latest commodity prices with caching.
+    
+    Query Params:
+        symbols: Comma-separated list (e.g., "XAU,XAG,WTIOIL-FUT")
+                 Default: all tracked commodities
+    """
+    try:
+        service = get_commodity_service()
+        symbol_list = symbols.split(",") if symbols else None
+        data = await service.fetch_prices(symbol_list)
+        
+        return Response(
+            content=json.dumps(data),
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=300"}  # 5-minute cache
+        )
+    except Exception as e:
+        logger.exception("Commodity API error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Conflicts API ─────────────────────────────────────────────────────
+
+@app.get("/api/conflicts/all", tags=["conflicts"])
+async def get_all_conflicts(refresh: bool = False):
+    """Get all tracked conflicts from CFR Global Conflict Tracker.
+    
+    Query Params:
+        refresh: Force refresh from source (default: use cache if fresh)
+    """
+    try:
+        service = get_conflict_service()
+        data = await service.get_conflicts(force_refresh=refresh)
+        
+        return Response(
+            content=json.dumps(data),
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=300"}
+        )
+    except Exception as e:
+        logger.exception("Conflicts API error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conflicts/{conflict_id}", tags=["conflicts"])
+async def get_conflict_details(conflict_id: int):
+    """Get detailed information for a specific conflict.
+    
+    Path Params:
+        conflict_id: Numeric conflict ID
+    """
+    try:
+        service = get_conflict_service()
+        conflict = service.get_conflict_by_id(conflict_id)
+        
+        if not conflict:
+            raise HTTPException(status_code=404, detail="Conflict not found")
+        
+        return Response(
+            content=json.dumps({
+                "success": True,
+                "conflict": conflict,
+                "timestamp": json.dumps(asyncio.get_event_loop().time())
+            }),
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=600"}  # 10-minute cache
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Conflict details error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Static mount (must be LAST — catches everything else) ─────────────

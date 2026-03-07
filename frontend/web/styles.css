@@ -369,6 +369,105 @@ svg path { fill: currentColor !important; }
 
 .leaflet-popup-tip { background: #f5f2e8; }
 
+/* ── COMMODITY WIDGET ── */
+.commodity-widget {
+  margin-top: 20px;
+  background: #1a1a1a;
+  border: 3px solid #ffd700;
+  padding: 12px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+}
+
+.commodity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ffd700;
+}
+
+.commodity-header h4 {
+  color: #ffd700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.commodity-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.commodity-card {
+  background: #2a2a2a;
+  border: 2px solid #444;
+  padding: 10px;
+  transition: all 0.2s;
+}
+
+.commodity-card:hover {
+  border-color: #ffd700;
+  transform: translateX(2px);
+}
+
+.commodity-name {
+  color: #ffd700;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.commodity-price {
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.commodity-change {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.commodity-change.up {
+  color: #00ff88;
+}
+
+.commodity-change.down {
+  color: #ff3366;
+}
+
+.commodity-change.neutral {
+  color: #999;
+}
+
+.commodity-meta {
+  color: #888;
+  font-size: 0.65rem;
+  margin-top: 4px;
+}
+
+.commodity-loading {
+  color: #888;
+  text-align: center;
+  padding: 20px;
+  font-size: 0.8rem;
+}
+
+.commodity-footer {
+  padding-top: 8px;
+  border-top: 1px solid #444;
+  text-align: center;
+}
+
+.commodity-footer .text-muted {
+  color: #888;
+}
+
 @media (max-width: 1100px) {
   .dashboard-grid { grid-template-columns: 1fr; height: auto; }
   .col { border-right: none; border-bottom: 2px solid #1a1a1a; }

@@ -15,18 +15,6 @@ import pathway as pw
 from telethon import TelegramClient, events
 
 
-# ========== CHANNEL CONFIGURATION ==========
-# Telegram channels to monitor in real time
-CHANNELS = ["intelslava", "insider_paper", "disclosetv"]
-
-# Source-level bias/provenance tags (used for narrative analysis)
-tags = {
-    "intelslava": "Independent",
-    "insider_paper": "Independent",
-    "disclosetv": "Independent"
-}
-
-
 class TelegramSource(pw.io.python.ConnectorSubject):
     """
     Pathway-compatible streaming connector for Telegram.
@@ -38,7 +26,8 @@ class TelegramSource(pw.io.python.ConnectorSubject):
     - Emits structured rows directly into the Pathway dataflow
     """
 
-    def __init__(self, api_id, api_hash, phone, polling_interval=60):
+    def __init__(self, api_id, api_hash, phone, channels=None, bias_tags=None, 
+                 backfill_limit=20, polling_interval=60):
         """
         Initialize the Telegram connector.
 
@@ -46,6 +35,9 @@ class TelegramSource(pw.io.python.ConnectorSubject):
             api_id (int): Telegram API ID
             api_hash (str): Telegram API hash
             phone (str): Phone number associated with the Telegram account
+            channels (list): List of channel handles to monitor
+            bias_tags (dict): Dictionary mapping channel handles to bias tags
+            backfill_limit (int): Number of historical messages to fetch per channel
             polling_interval (int): Interval for polling / housekeeping (unused for live events)
         """
         super().__init__()
@@ -53,6 +45,20 @@ class TelegramSource(pw.io.python.ConnectorSubject):
         self.api_hash = api_hash
         self.phone = phone
         self.polling_interval = polling_interval
+        self.backfill_limit = backfill_limit
+        
+        # Default channels if none provided
+        if channels is None:
+            channels = ["intelslava", "insider_paper", "disclosetv", "DefenderDome"]
+        
+        self.channels = channels
+        
+        # Default bias tags if none provided
+        if bias_tags is None:
+            bias_tags = {handle: "Independent" for handle in channels}
+        
+        self.bias_tags = bias_tags
+        
         # Track already-seen messages if deduplication is needed
         self.seen_messages = set()
 
@@ -80,7 +86,7 @@ class TelegramSource(pw.io.python.ConnectorSubject):
         # ========== LIVE MESSAGE HANDLER ==========
         # 4. Define Handler (For Live Data)
         # Triggered automatically whenever a new message arrives
-        @client.on(events.NewMessage(chats=CHANNELS))
+        @client.on(events.NewMessage(chats=self.channels))
         async def handler(event):
             await self._process_message(event, "LIVE")
 
@@ -97,11 +103,11 @@ class TelegramSource(pw.io.python.ConnectorSubject):
 
             # ========== HISTORICAL BACKFILL ==========
             # --- FETCH REAL HISTORY ---
-            print("📜 [Telegram] Fetching last 3 messages per channel...")
-            for channel in CHANNELS:
+            print(f"📜 [Telegram] Fetching last {self.backfill_limit} messages per channel...")
+            for channel in self.channels:
                 try:
-                    # Get last 20 messages from real history
-                    async for message in client.iter_messages(channel, limit=20):
+                    # Get last messages from real history
+                    async for message in client.iter_messages(channel, limit=self.backfill_limit):
                         if message and message.text:
                             await self._process_message(message, "HISTORY")
                 except Exception as e:
@@ -143,7 +149,7 @@ class TelegramSource(pw.io.python.ConnectorSubject):
             "text": str(event.text),
             "url": f"https://t.me/{username}/{event.id}",
             "timestamp": float(event.date.timestamp()),
-            "bias": tags.get(username, "Unknown")  # Look up bias tag by channel
+            "bias": self.bias_tags.get(username, "Unknown")  # Look up bias tag by channel
         }
         
         # Emit row into Pathway dataflow
