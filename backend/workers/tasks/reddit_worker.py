@@ -15,7 +15,7 @@ from models.database import SessionLocal, Event
 
 def load_reddit_config():
     """Load Reddit config from data_sources.json"""
-    config_path = Path(__file__).parent.parent.parent / "data" / "data_sources.json"
+    config_path = Path(__file__).parent.parent.parent.parent / "data" / "data_sources.json"
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)

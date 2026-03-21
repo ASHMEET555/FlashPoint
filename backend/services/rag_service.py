@@ -7,14 +7,14 @@ and OpenRouter for LLM inference.
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain_community.vectorstores import Qdrant
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_qdrant import Qdrant, QdrantVectorStore
 from qdrant_client import QdrantClient
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
+_MODEL = "openrouter/free"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
@@ -45,16 +45,16 @@ class RAGService:
         
         # Connect to Qdrant
         client = QdrantClient(url=QDRANT_URL)
-        self.vectorstore = Qdrant(
+        self.vectorstore = QdrantVectorStore(
             client=client,
             collection_name=COLLECTION_NAME,
-            embeddings=self.embeddings
+            embedding=self.embeddings,   # note: "embedding" not "embeddings"
         )
         
         # Initialize OpenRouter LLM
         self.llm = ChatOpenAI(
             model="meta-llama/llama-3.3-70b-instruct:free",
-            openai_api_base="https://openrouter.ai/api/v1",
+            openai_api_base=_MODEL,
             openai_api_key=OPENROUTER_API_KEY,
             temperature=0.7,
             max_tokens=1000,
@@ -104,42 +104,17 @@ Analysis:"""
         
         self._initialized = True
         print("✅ RAG Service initialized (LangChain + Qdrant)")
-    
+ # query() method simplified:
     def query(self, question: str) -> dict:
-        """Query the intelligence database
-        
-        Args:
-            question: User query
-            
-        Returns:
-            dict with 'answer' and 'sources'
-        """
         self._initialize()
-        
         try:
-            result = self.qa_chain({"query": question})
-            
-            # Extract sources
-            sources = []
-            for doc in result.get("source_documents", []):
-                sources.append({
-                    "text": doc.page_content[:200] + "...",
-                    "metadata": doc.metadata
-                })
-            
-            return {
-                "success": True,
-                "answer": result["result"],
-                "sources": sources,
-                "num_sources": len(sources)
-            }
-            
+            docs = self.vectorstore.as_retriever(
+                search_kwargs={"k": 10}
+            ).invoke(question)
+            context = "\n\n".join([d.page_content for d in docs])
+            return {"success": True, "answer": context, "sources": []}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "answer": f"Error querying intelligence database: {e}"
-            }
+            return {"success": False, "error": str(e), "answer": str(e)}
     
     async def query_streaming(self, question: str):
         """Query with streaming response (async generator)
@@ -155,7 +130,7 @@ Analysis:"""
             )
             
             # Retrieve documents
-            docs = retriever.get_relevant_documents(question)
+            docs = retriever.invoke(question)
             
             # Build context
             context = "\n\n".join([

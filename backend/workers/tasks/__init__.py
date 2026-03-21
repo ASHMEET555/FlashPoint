@@ -1,12 +1,12 @@
 """Tasks package - Celery workers for data ingestion and processing"""
 
-from tasks.rss_worker import fetch_all_rss, fetch_single_rss
-from tasks.reddit_worker import fetch_reddit
-from tasks.news_worker import fetch_news
-from tasks.conflict_worker import scrape_conflicts
-from tasks.commodity_worker import fetch_commodities
-from tasks.telegram_worker import start_telegram_stream
-from tasks.processor import process_event, batch_process_events
+from .rss_worker import fetch_all_rss, fetch_single_rss
+from .reddit_worker import fetch_reddit
+from .news_worker import fetch_news
+from .conflict_worker import scrape_conflicts
+from .commodity_worker import fetch_commodities
+from .telegram_worker import start_telegram_stream
+from .processor import process_event, batch_process_events
 
 __all__ = [
     "fetch_all_rss",

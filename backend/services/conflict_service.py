@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 
 # ========== CONFIG ==========
 CFR_URL = "https://www.cfr.org/global-conflict-tracker"
-CACHE_FILE = Path(__file__).parent.parent / "data" / "conflicts.json"
+CACHE_FILE = Path(__file__).parent.parent.parent.parent / "data" / "conflicts.json"
 REFRESH_HOURS = 12
 
 # Region coordinates (approximate centers)

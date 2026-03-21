@@ -21,7 +21,7 @@ NEWS_API_KEY = os.getenv("GNEWS_API_KEY")
 
 def load_news_config():
     """Load News API config"""
-    config_path = Path(__file__).parent.parent.parent / "data" / "data_sources.json"
+    config_path = Path(__file__).parent.parent.parent.parent / "data" / "data_sources.json"
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)

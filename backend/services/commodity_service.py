@@ -1,14 +1,10 @@
-"""Commodity Price Monitoring Service
+"""Commodity Price Service
 
-Fetches real-time commodity prices (Gold, Silver, Oil) from CommodityAPI
-with intelligent caching and quota management.
+Uses two genuinely free APIs:
+- gold-api.com      — Gold (XAU) and Silver (XAG), no credit card
+- oilpriceapi.com   — WTI and Brent crude, free tier
 
-Features:
-- 3-hour cache with automatic refresh
-- Alternate between two API keys for load balancing
-- Track API usage against 2000 calls/year limit per key
-- Fallback to cached data if API fails
-- Persistent storage in commodity_cache.json
+Cache: data/commodity_cache.json, refreshed every 3 hours.
 """
 
 import json
@@ -21,236 +17,141 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ========== CONFIG ==========
-API_KEY_1 = os.getenv("COMMODITY_PRICE_API1")
-API_KEY_2 = os.getenv("COMMODITY_PRICE_API2", "")  # Optional second key
+OIL_API_KEY  = os.getenv("OIL_API_KEY", "")
 
-BASE_URL = "https://api.commodityapi.com/api/latest"
-CACHE_FILE = Path(__file__).parent.parent / "data" / "commodity_cache.json"
+# Cache lives in the root data/ folder
+CACHE_FILE = Path(__file__).parent.parent.parent / "data" / "commodity_cache.json"
 CACHE_DURATION_HOURS = 3
-YEARLY_QUOTA_PER_KEY = 2000
 
-# Commodity symbols to track
-SYMBOLS = {
-    "XAU": {"name": "Gold", "unit": "troy oz", "icon": "🥇"},
-    "XAG": {"name": "Silver", "unit": "troy oz", "icon": "🥈"},
-    "WTIOIL-FUT": {"name": "WTI Crude Oil", "unit": "barrel", "icon": "🛢️"},
-    "BRENTOIL-FUT": {"name": "Brent Crude Oil", "unit": "barrel", "icon": "🛢️"}
+COMMODITIES = {
+    "XAU":          {"name": "Gold",           "unit": "troy oz",  "source": "gold"},
+    "XAG":          {"name": "Silver",          "unit": "troy oz",  "source": "gold"},
+    "WTI_USD":      {"name": "WTI Crude Oil",   "unit": "barrel",   "source": "oil"},
+    "BRENT_USD":    {"name": "Brent Crude Oil", "unit": "barrel",   "source": "oil"},
 }
 
 
 class CommodityService:
-    """Manages commodity price fetching with caching and quota tracking."""
-    
+
     def __init__(self):
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         self.cache = self._load_cache()
-        self.api_keys = [k for k in [API_KEY_1, API_KEY_2] if k]
-        if not self.api_keys:
-            raise ValueError("At least one COMMODITY_PRICE_API key must be set in .env")
-    
+
     def _load_cache(self) -> Dict:
-        """Load cache from JSON file."""
-        if not CACHE_FILE.exists():
-            return self._initialize_cache()
-        
-        try:
-            with open(CACHE_FILE, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️ Cache load error: {e}, reinitializing")
-            return self._initialize_cache()
-    
-    def _initialize_cache(self) -> Dict:
-        """Create fresh cache structure."""
-        return {
-            "prices": {},
-            "metadata": {
-                "last_refresh": None,
-                "api_keys": {
-                    key: {"calls_used": 0, "quota": YEARLY_QUOTA_PER_KEY, "last_reset": datetime.now().year}
-                    for key in self.api_keys
-                }
-            }
-        }
-    
+        if CACHE_FILE.exists():
+            try:
+                with open(CACHE_FILE) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"prices": {}, "last_refresh": None}
+
     def _save_cache(self):
-        """Persist cache to disk."""
         try:
-            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(CACHE_FILE, 'w') as f:
+            with open(CACHE_FILE, "w") as f:
                 json.dump(self.cache, f, indent=2, default=str)
-        except IOError as e:
+        except Exception as e:
             print(f"⚠️ Cache save error: {e}")
-    
-    def _is_cache_fresh(self) -> bool:
-        """Check if cached data is still valid."""
-        last_refresh = self.cache["metadata"].get("last_refresh")
-        if not last_refresh:
+
+    def _is_fresh(self) -> bool:
+        last = self.cache.get("last_refresh")
+        if not last:
             return False
-        
-        last_time = datetime.fromisoformat(last_refresh)
-        age_hours = (datetime.now() - last_time).total_seconds() / 3600
-        return age_hours < CACHE_DURATION_HOURS
-    
-    def _select_api_key(self) -> Optional[str]:
-        """Select API key with lowest usage."""
-        current_year = datetime.now().year
-        keys_metadata = self.cache["metadata"]["api_keys"]
-        
-        # Reset counters if new year
-        for key_data in keys_metadata.values():
-            if key_data.get("last_reset", current_year) < current_year:
-                key_data["calls_used"] = 0
-                key_data["last_reset"] = current_year
-        
-        # Find key with most remaining quota
-        available_keys = [
-            (key, data["quota"] - data["calls_used"])
-            for key, data in keys_metadata.items()
-            if data["calls_used"] < data["quota"]
-        ]
-        
-        if not available_keys:
-            print("⚠️ All API keys exhausted quota!")
-            return None
-        
-        return max(available_keys, key=lambda x: x[1])[0]
-    
+        age = (datetime.now() - datetime.fromisoformat(last)).total_seconds() / 3600
+        return age < CACHE_DURATION_HOURS
+
+    async def _fetch_gold(self) -> Dict[str, float]:
+        """Fetch XAU and XAG from gold-api.com — no key required"""
+        prices = {}
+        for symbol in ["XAU", "XAG"]:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(
+                        f"https://api.gold-api.com/price/{symbol}"
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    prices[symbol] = float(data["price"])
+                    print(f"✅ {symbol}: ${prices[symbol]:.2f}")
+            except Exception as e:
+                print(f"⚠️ Gold API error for {symbol}: {e}")
+        return prices
+
+    async def _fetch_oil(self) -> Dict[str, float]:
+        """Fetch WTI and Brent from oilpriceapi.com"""
+        prices = {}
+        if not OIL_API_KEY:
+            print("⚠️ OIL_API_KEY not set — skipping oil fetch")
+            return prices
+
+        for code in ["WTI_USD", "BRENT_USD"]:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(
+                        f"https://api.oilpriceapi.com/v1/prices/latest",
+                        params={"by_code": code},
+                        headers={
+                            "Authorization": f"Token {OIL_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    prices[code] = float(data["data"]["price"])
+                    print(f"✅ {code}: ${prices[code]:.2f}")
+            except Exception as e:
+                print(f"⚠️ Oil API error for {code}: {e}")
+
+        return prices
+
     async def fetch_prices(self, symbols: Optional[List[str]] = None) -> Dict:
-        """Fetch commodity prices with caching.
-        
-        Args:
-            symbols: List of commodity symbols (defaults to all tracked symbols)
-            
-        Returns:
-            Dict with price data and metadata
-        """
-        if symbols is None:
-            symbols = list(SYMBOLS.keys())
-        
-        # Return cached data if fresh
-        if self._is_cache_fresh():
-            cached_prices = {
-                sym: self.cache["prices"].get(sym)
-                for sym in symbols
-                if sym in self.cache["prices"]
-            }
-            if all(cached_prices.values()):
-                return {
-                    "success": True,
-                    "timestamp": datetime.now().isoformat(),
-                    "data": cached_prices,
-                    "cached": True,
-                    "api_usage": self._get_usage_stats()
-                }
-        
+        """Fetch prices with caching. Returns cached data if fresh."""
+        if self._is_fresh() and self.cache["prices"]:
+            return self._format_response(cached=True)
+
         # Fetch fresh data
-        return await self._fetch_from_api(symbols)
-    
-    async def _fetch_from_api(self, symbols: List[str]) -> Dict:
-        """Fetch data from CommodityAPI."""
-        api_key = self._select_api_key()
-        if not api_key:
-            # Fallback to cache if available
-            return {
-                "success": False,
-                "error": "API quota exhausted",
-                "data": {sym: self.cache["prices"].get(sym) for sym in symbols},
-                "cached": True,
-                "api_usage": self._get_usage_stats()
-            }
-        
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    BASE_URL,
-                    params={
-                        "access_key": api_key,
-                        "base": "USD",
-                        "symbols": ",".join(symbols)
-                    }
-                )
-                response.raise_for_status()
-                data = response.json()
-            
-            if not data.get("success"):
-                raise Exception(data.get("error", {}).get("info", "API returned error"))
-            
-            # Update cache
-            self._update_cache(data["data"]["rates"], api_key)
-            
-            return {
-                "success": True,
-                "timestamp": datetime.now().isoformat(),
-                "data": {
-                    sym: {
-                        "rate": self.cache["prices"][sym]["rate"],
-                        "unit": SYMBOLS[sym]["unit"],
-                        "quote": "USD",
-                        "cached": False,
-                        "cached_at": self.cache["prices"][sym]["timestamp"]
-                    }
-                    for sym in symbols
-                    if sym in self.cache["prices"]
-                },
-                "cached": False,
-                "api_usage": self._get_usage_stats()
-            }
-            
-        except (httpx.HTTPError, Exception) as e:
-            print(f"⚠️ API fetch error: {e}")
-            # Fallback to cache
-            return {
-                "success": False,
-                "error": str(e),
-                "data": {
-                    sym: self.cache["prices"].get(sym)
-                    for sym in symbols
-                    if sym in self.cache["prices"]
-                },
-                "cached": True,
-                "api_usage": self._get_usage_stats()
-            }
-    
-    def _update_cache(self, rates: Dict[str, float], api_key: str):
-        """Update cache with fresh data."""
-        timestamp = datetime.now().isoformat()
-        
-        for symbol, rate in rates.items():
-            self.cache["prices"][symbol] = {
-                "rate": rate,
-                "timestamp": timestamp,
-                "unit": SYMBOLS.get(symbol, {}).get("unit", "unknown")
-            }
-        
-        self.cache["metadata"]["last_refresh"] = timestamp
-        self.cache["metadata"]["api_keys"][api_key]["calls_used"] += 1
-        self._save_cache()
-    
-    def _get_usage_stats(self) -> Dict:
-        """Get API usage statistics."""
-        stats = self.cache["metadata"]["api_keys"]
-        total_used = sum(data["calls_used"] for data in stats.values())
-        total_quota = sum(data["quota"] for data in stats.values())
-        
+        gold_prices = await self._fetch_gold()
+        oil_prices  = await self._fetch_oil()
+        all_prices  = {**gold_prices, **oil_prices}
+
+        if all_prices:
+            timestamp = datetime.now().isoformat()
+            for symbol, price in all_prices.items():
+                self.cache["prices"][symbol] = {
+                    "rate": price,
+                    "timestamp": timestamp,
+                    "unit": COMMODITIES.get(symbol, {}).get("unit", "USD"),
+                    "name": COMMODITIES.get(symbol, {}).get("name", symbol),
+                }
+            self.cache["last_refresh"] = timestamp
+            self._save_cache()
+
+        return self._format_response(cached=False)
+
+    def _format_response(self, cached: bool) -> Dict:
+        prices = self.cache.get("prices", {})
+        formatted = {}
+        for symbol, data in prices.items():
+            if data:
+                formatted[symbol] = {
+                    "rate": data.get("rate", 0),
+                    "name": data.get("name", COMMODITIES.get(symbol, {}).get("name", symbol)),
+                    "unit": data.get("unit", "USD"),
+                    "cached_at": data.get("timestamp"),
+                }
         return {
-            "used": total_used,
-            "quota": total_quota,
-            "remaining": total_quota - total_used,
-            "keys": len(stats),
-            "expires": f"{datetime.now().year}-12-31"
+            "success": bool(formatted),
+            "timestamp": datetime.now().isoformat(),
+            "data": formatted,
+            "prices": formatted,   # keep both keys for frontend compatibility
+            "cached": cached,
+            "last_refresh": self.cache.get("last_refresh"),
         }
-    
-    def get_price_sync(self, symbol: str) -> Optional[Dict]:
-        """Get single price synchronously from cache."""
-        return self.cache["prices"].get(symbol)
 
 
-# Singleton instance
 _service = None
 
 def get_commodity_service() -> CommodityService:
-    """Get or create CommodityService singleton."""
     global _service
     if _service is None:
         _service = CommodityService()

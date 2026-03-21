@@ -23,15 +23,15 @@ celery_app = Celery(
     "flashpoint",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=[
-        "tasks.rss_worker",
-        "tasks.reddit_worker",
-        "tasks.news_worker",
-        "tasks.telegram_worker",
-        "tasks.conflict_worker",
-        "tasks.commodity_worker",
-        "tasks.processor"
-    ]
+   include=[
+    "workers.tasks.rss_worker",
+    "workers.tasks.reddit_worker",
+    "workers.tasks.news_worker",
+    "workers.tasks.telegram_worker",
+    "workers.tasks.conflict_worker",
+    "workers.tasks.commodity_worker",
+    "workers.tasks.processor"
+]
 )
 
 # Celery configuration

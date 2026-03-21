@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 def load_rss_config():
     """Load RSS feeds from data_sources.json"""
-    config_path = Path(__file__).parent.parent.parent / "data" / "data_sources.json"
+    config_path = Path(__file__).parent.parent.parent.parent / "data" / "data_sources.json"
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -92,7 +92,7 @@ def fetch_single_rss(feed_config: dict):
             
             # Create event
             event = Event(
-                source="RSS",
+                source=name,
                 text=text,
                 url=link,
                 timestamp=timestamp,

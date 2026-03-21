@@ -39,7 +39,7 @@ async def telegram_stream_async():
         from pathlib import Path
         
         # Load channel configuration
-        config_path = Path(__file__).parent.parent.parent / "data" / "data_sources.json"
+        config_path = Path(__file__).parent.parent.parent.parent / "data" / "data_sources.json"
         with open(config_path, 'r') as f:
             config = json.load(f)
         

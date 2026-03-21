@@ -33,8 +33,9 @@ _client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     base_url="https://openrouter.ai/api/v1",
 )
-_MODEL = "openrouter/free"
-# ── Prompt template ───────────────────────────────────────────────────
+
+# To a real free model slug, e.g.:
+_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-lite:free")# ── Prompt template ───────────────────────────────────────────────────
 _PROMPT_TEMPLATE = """\
 TASK: Synthesize the provided 'Raw Intel' into a professional intelligence briefing.
 

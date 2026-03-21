@@ -12,13 +12,14 @@ from models.database import init_db, init_timescaledb, engine
 from models.redis_client import redis_health_check
 from workers.tasks.processor import get_qdrant_client
 import asyncio
-
+from sqlalchemy import text
 
 def check_postgresql():
     """Check PostgreSQL connection"""
     try:
         with engine.connect() as conn:
-            result = conn.execute("SELECT version();")
+            result = conn.execute(text("SELECT version();"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;"))
             version = result.fetchone()[0]
             print(f"✅ PostgreSQL: {version[:50]}...")
             return True
