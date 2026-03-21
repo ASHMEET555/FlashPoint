@@ -11,7 +11,7 @@ let isStreaming = false;
  * Append message to chat log
  */
 function appendMessage(role, content) {
-    const log = document.getElementById("chat-log");
+    const log = document.getElementById("chat-history");
     if (!log) return;
 
     const msgDiv = document.createElement("div");
@@ -31,7 +31,7 @@ function appendMessage(role, content) {
  */
 async function streamResponse(userMessage) {
     isStreaming = true;
-    const log = document.getElementById("chat-log");
+    const log = document.getElementById("chat-history");
     if (!log) return;
 
     // Create assistant message container
@@ -142,7 +142,7 @@ export function initChat() {
     form.addEventListener("submit", handleChatSubmit);
     
     // Welcome message
-    const log = document.getElementById("chat-log");
+    const log = document.getElementById("chat-history");
     if (log && log.children.length === 0) {
         const welcome = document.createElement("div");
         welcome.className = "chat-msg chat-msg--system";

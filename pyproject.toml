@@ -15,7 +15,10 @@ dependencies = [
     "google-genai>=1.0.0",
     "httpx>=0.28.1",
     "langchain>=0.3.27",
+    "langchain-community>=0.3.31",
+    "langchain-huggingface>=0.3.1",
     "langchain-openai>=0.3.35",
+    "langchain-qdrant>=0.2.1",
     "lxml>=6.0.2",
     "pandas>=2.3.3",
     "pdf2image>=1.17.0",
@@ -30,6 +33,7 @@ dependencies = [
     "telethon>=1.42.0",
     "typer>=0.24.1",
     "uvicorn>=0.41.0",
+    "websockets>=16.0",
 ]
 
 [tool.uv.sources]

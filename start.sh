@@ -61,7 +61,7 @@ cd ..
 
 echo ""
 echo "[3/5] Starting Celery worker..."
-celery -A backend.celery_config worker \
+celery -A backend.config.celery_config worker \
     -l info \
     -Q data_ingestion,processing,scraping,realtime \
     --detach \
@@ -72,7 +72,7 @@ echo "✅ Celery worker started (PID file: /tmp/celery_worker.pid)"
 
 echo ""
 echo "[4/5] Starting Celery beat (scheduler)..."
-celery -A backend.celery_config beat \
+celery -A backend.config.celery_config beat \
     -l info \
     --detach \
     --pidfile=/tmp/celery_beat.pid \

@@ -20,10 +20,17 @@ from services.report_service import generate_pdf_bytes, generate_sitrep
 from services.commodity_service import get_commodity_service
 from services.conflict_service import get_conflict_service
 from services.rag_service import get_rag_service
+from services.tracking_service import fetch_flights, get_ships, get_flights
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="FlashPoint Intel API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(app):
+    # Start AIS ship stream in background
+    asyncio.create_task(stream_ships())
+    yield
+
+app = FastAPI(title="FlashPoint Intel API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +44,8 @@ _ASSETS_DIR   = Path(__file__).resolve().parent.parent / "frontend" / "assets"
 
 latest_news: deque[Dict[str, Any]] = deque(maxlen=100)
 
+from contextlib import asynccontextmanager
+from services.tracking_service import stream_ships
 
 # ── Health ────────────────────────────────────────────────────────────
 
@@ -224,6 +233,18 @@ async def receive_stream(data: Dict[str, Any]):
     latest_news.append(data)
     return {"status": "received"}
 
+
+@app.get("/api/tracking/flights", tags=["tracking"])
+async def get_flight_data(military_only: bool = False):
+    flights = await fetch_flights()
+    if military_only:
+        flights = [f for f in flights if f.get("military")]
+    return {"success": True, "count": len(flights), "flights": flights}
+
+@app.get("/api/tracking/ships", tags=["tracking"])
+async def get_ship_data(tankers_only: bool = False):
+    ships = get_ships(tankers_only)
+    return {"success": True, "count": len(ships), "ships": ships}
 
 # ── Static mount — MUST BE LAST ───────────────────────────────────────
 if _ASSETS_DIR.is_dir():

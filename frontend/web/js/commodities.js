@@ -1,85 +1,37 @@
-/**
- * commodities.js - Real-time commodity price tracker
- */
-
 import { API_BASE, ENDPOINTS, escapeHTML } from './utils.js';
 
-let lastPrices = {};
-
-/**
- * Render commodity prices
- */
-function renderCommodityPrices(prices) {
-    const container = document.getElementById("commodities-container");
-    if (!container) return;
-
-    container.innerHTML = "";
-
-    if (!prices || prices.length === 0) {
-        container.innerHTML = `<div class="commodity-item">No data available</div>`;
-        return;
-    }
-
-    prices.forEach(item => {
-        const symbol = item.symbol || "???";
-        const rate = item.rate !== undefined ? item.rate.toFixed(2) : "N/A";
-        const unit = item.unit || "";
-        const change24h = item.change_24h || 0;
-        
-        const changeClass = change24h >= 0 ? "commodity-up" : "commodity-down";
-        const changeIcon = change24h >= 0 ? "▲" : "▼";
-        const changeText = Math.abs(change24h).toFixed(2);
-
-        const div = document.createElement("div");
-        div.className = "commodity-item";
-        div.innerHTML = `
-            <div class="commodity-symbol">${escapeHTML(symbol)}</div>
-            <div class="commodity-price">$${rate} <span class="commodity-unit">${escapeHTML(unit)}</span></div>
-            <div class="commodity-change ${changeClass}">
-                ${changeIcon} ${changeText}%
-            </div>
-        `;
-        container.appendChild(div);
-
-        lastPrices[symbol] = rate;
-    });
+export function initCommodities() {
+    fetchCommodityPrices();
+    setInterval(fetchCommodityPrices, 5 * 60 * 1000);
 }
 
-/**
- * Fetch commodity prices from API
- */
 async function fetchCommodityPrices() {
+    const container = document.getElementById("commodity-grid");
     try {
         const resp = await fetch(`${API_BASE}${ENDPOINTS.commodities}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const json = await resp.json();
+        const raw = json.data || json.prices || {};
 
-        const data = await resp.json();
-        if (data.success && data.commodities) {
-            renderCommodityPrices(data.commodities);
-            console.log("✅ Updated commodity prices");
-        }
+        const html = Object.entries(raw)
+            .filter(([, v]) => v && v.rate)
+            .map(([symbol, info]) => `
+                <div class="commodity-card">
+                    <div class="commodity-name">${escapeHTML(info.name || symbol)}</div>
+                    <div class="commodity-price">$${parseFloat(info.rate).toFixed(2)}</div>
+                    <div class="commodity-meta">${escapeHTML(info.unit || "USD")} • ${escapeHTML(symbol)}</div>
+                </div>
+            `).join("");
+
+        if (container) container.innerHTML = html || "<div class='commodity-loading'>No data</div>";
+
+        const footer = document.getElementById("commodity-footer");
+        if (footer) footer.innerHTML = `<span class="text-muted" style="font-size:0.7rem;">
+            Last updated: ${new Date().toLocaleTimeString("en-US", {hour12:false})}
+        </span>`;
 
     } catch (err) {
-        console.error("Failed to fetch commodities:", err);
-        const container = document.getElementById("commodities-container");
-        if (container) {
-            container.innerHTML = `
-                <div class="commodity-item" style="color: #FF4444;">
-                    ⚠️ Failed to load prices
-                </div>
-            `;
-        }
+        console.error("Commodity error:", err);
+        if (container) container.innerHTML = `<div style="color:#ff4444;">⚠️ ${err.message}</div>`;
     }
-}
-
-/**
- * Initialize commodity tracker
- */
-export function initCommodities() {
-    fetchCommodityPrices();
-    
-    // Update every 5 minutes
-    setInterval(fetchCommodityPrices, 5 * 60 * 1000);
-    
-    console.log("💰 Commodities tracker initialized");
 }

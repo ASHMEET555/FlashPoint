@@ -4,7 +4,7 @@
 
 import { escapeHTML } from './utils.js';
 
-let map, markerLayer;
+export let map, markerLayer;
 const locationFreq = {};
 const HOTSPOT_COLORS = {
     1: "#00FF00",
@@ -17,7 +17,7 @@ const HOTSPOT_COLORS = {
  * Initialize Leaflet map
  */
 export function initMap() {
-    map = L.map("map-canvas", {
+    map = L.map("map", {
         center: [30, 20],
         zoom: 2,
         zoomControl: true,

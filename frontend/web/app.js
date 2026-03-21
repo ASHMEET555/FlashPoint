@@ -1,13 +1,12 @@
-import { updateClock } from './js/utils.js';
-import { initFeed } from './js/feed.js';
-import { initMap } from './js/map.js';
-import { initChat } from './js/chat.js';
-import { initCommodities } from './js/commodities.js';
-import { initConflicts } from './js/conflicts.js';
-import { initReports } from './js/reports.js';
+import { updateClock } from './js/utils.js?v=3';
+import { initFeed } from './js/feed.js?v=3';
+import { initMap } from './js/map.js?v=3';
+import { initChat } from './js/chat.js?v=3';
+import { initCommodities } from './js/commodities.js?v=3';
+import { initConflicts } from './js/conflicts.js?v=3';
+import { initReports } from './js/reports.js?v=3';
 
 function init() {
-    console.log("Initializing FlashPoint...");
     updateClock();
     setInterval(updateClock, 1000);
     initMap();
