@@ -30,10 +30,10 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from geo_extractor import extract_location
-from report_service import generate_pdf_bytes, generate_sitrep
-from commodity_service import get_commodity_service
-from conflict_service import get_conflict_service
+from services.geo_extractor import extract_location
+from services.report_service import generate_pdf_bytes, generate_sitrep
+from services.commodity_service import get_commodity_service
+from services.conflict_service import get_conflict_service
 
 logger = logging.getLogger(__name__)
 
