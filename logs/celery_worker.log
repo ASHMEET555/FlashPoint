@@ -1,0 +1,9 @@
+[2026-03-22 15:55:14,096: INFO/MainProcess] Task tasks.reddit_worker.fetch_reddit[a0b159d3-4b29-45a4-86bc-318c642a80a3] received
+[2026-03-22 15:55:15,622: WARNING/ForkPoolWorker-10] ✅ Reddit: 0 new posts
+[2026-03-22 15:55:15,634: INFO/ForkPoolWorker-10] Task tasks.reddit_worker.fetch_reddit[a0b159d3-4b29-45a4-86bc-318c642a80a3] succeeded in 1.5367682470005093s: {'status': 'success', 'new_posts': 0}
+[2026-03-22 15:56:14,094: INFO/MainProcess] Task tasks.reddit_worker.fetch_reddit[5a172006-7866-403a-a59e-68a73a166c55] received
+[2026-03-22 15:56:16,245: INFO/MainProcess] Task tasks.processor.process_event[7dc0cd5a-35d6-4079-89d8-25a12a83a5e6] received
+[2026-03-22 15:56:16,262: WARNING/ForkPoolWorker-10] ✅ Reddit: 1 new posts
+[2026-03-22 15:56:16,266: INFO/ForkPoolWorker-10] Task tasks.reddit_worker.fetch_reddit[5a172006-7866-403a-a59e-68a73a166c55] succeeded in 2.1704693190004036s: {'status': 'success', 'new_posts': 1}
+[2026-03-22 15:56:16,292: WARNING/ForkPoolWorker-11] ⚠️ Event None not found
+[2026-03-22 15:56:16,293: INFO/ForkPoolWorker-11] Task tasks.processor.process_event[7dc0cd5a-35d6-4079-89d8-25a12a83a5e6] succeeded in 0.046918779000407085s: {'status': 'error', 'message': 'Event not found'}
