@@ -1,7 +1,0 @@
-source,url,bias
-"Russia Today","https://www.rt.com/rss/news/","Pro Russia"
-"SCMP","https://www.scmp.com/rss/318199/feed/","Pro China"
-"NYTimes","https://rss.nytimes.com/services/xml/rss/nyt/World.xml","US/Western"
-"BBC","https://feeds.bbci.co.uk/news/world/rss.xml","UK/Western"
-"The Guardian","https://www.theguardian.com/world/rss","UK/Western"
-"Al Jazeera","https://www.aljazeera.com/xml/rss/all.xml","MiddleEast"

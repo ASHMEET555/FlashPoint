@@ -1,0 +1,72 @@
+[2026-03-22 15:55:14,096: INFO/MainProcess] Task tasks.reddit_worker.fetch_reddit[a0b159d3-4b29-45a4-86bc-318c642a80a3] received
+[2026-03-22 15:55:15,622: WARNING/ForkPoolWorker-10] ✅ Reddit: 0 new posts
+[2026-03-22 15:55:15,634: INFO/ForkPoolWorker-10] Task tasks.reddit_worker.fetch_reddit[a0b159d3-4b29-45a4-86bc-318c642a80a3] succeeded in 1.5367682470005093s: {'status': 'success', 'new_posts': 0}
+[2026-03-22 15:56:14,094: INFO/MainProcess] Task tasks.reddit_worker.fetch_reddit[5a172006-7866-403a-a59e-68a73a166c55] received
+[2026-03-22 15:56:16,245: INFO/MainProcess] Task tasks.processor.process_event[7dc0cd5a-35d6-4079-89d8-25a12a83a5e6] received
+[2026-03-22 15:56:16,262: WARNING/ForkPoolWorker-10] ✅ Reddit: 1 new posts
+[2026-03-22 15:56:16,266: INFO/ForkPoolWorker-10] Task tasks.reddit_worker.fetch_reddit[5a172006-7866-403a-a59e-68a73a166c55] succeeded in 2.1704693190004036s: {'status': 'success', 'new_posts': 1}
+[2026-03-22 15:56:16,292: WARNING/ForkPoolWorker-11] ⚠️ Event None not found
+[2026-03-22 15:56:16,293: INFO/ForkPoolWorker-11] Task tasks.processor.process_event[7dc0cd5a-35d6-4079-89d8-25a12a83a5e6] succeeded in 0.046918779000407085s: {'status': 'error', 'message': 'Event not found'}
+[2026-03-22 15:57:07,858: INFO/MainProcess] Task tasks.news_worker.fetch_news[e0c43f2a-adcc-4dc1-9359-10a91788d0a4] received
+[2026-03-22 15:57:07,872: INFO/MainProcess] Task tasks.rss_worker.fetch_all_rss[94560f05-68d2-4f81-b875-12575fdf4f68] received
+[2026-03-22 15:57:07,874: WARNING/ForkPoolWorker-11] 📡 Fetching 18 RSS feeds...
+[2026-03-22 15:57:07,876: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[ed1dd185-ae5c-4edd-9ab8-748c1d746bbd] received
+[2026-03-22 15:57:07,878: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[0c027103-68c0-4aad-bc5f-fff36d780319] received
+[2026-03-22 15:57:07,880: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[68ffd4d6-301c-4246-b2ad-a4f9b3ec0a81] received
+[2026-03-22 15:57:07,882: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[848f5106-17ce-40b9-8c88-0044df40befc] received
+[2026-03-22 15:57:07,884: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[6ef7497a-f60f-4aff-bf37-636a7938b345] received
+[2026-03-22 15:57:07,886: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[64a106a9-acf2-439c-b328-30dbfa55034e] received
+[2026-03-22 15:57:07,889: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[6feef462-cee0-4e8a-905d-eb47fd4a2129] received
+[2026-03-22 15:57:07,891: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[dfd8fd7b-c639-4e53-8735-3fbd6322be5f] received
+[2026-03-22 15:57:07,894: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[6098e79a-38b7-44dd-a4ed-812112bbbb19] received
+[2026-03-22 15:57:07,896: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[e8ba2d49-497c-415f-9d99-4ec25629a6ca] received
+[2026-03-22 15:57:07,899: INFO/ForkPoolWorker-11] Task tasks.rss_worker.fetch_all_rss[94560f05-68d2-4f81-b875-12575fdf4f68] succeeded in 0.026459894001163775s: {'status': 'queued', 'count': 18}
+[2026-03-22 15:57:07,899: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[e1ab1785-35c0-4a26-abc9-65fe6cf27e1d] received
+[2026-03-22 15:57:07,901: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[9d382f13-590e-49e4-ad74-c0ea5ebb07c4] received
+[2026-03-22 15:57:07,904: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[3e693570-22a3-47a4-bb33-b6ccd2ed68a4] received
+[2026-03-22 15:57:07,908: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[db49f3dc-f252-4f94-88f0-95aa372e278c] received
+[2026-03-22 15:57:07,910: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[ed7a753b-a4ce-4d55-91b3-fa52ff4c3ad4] received
+[2026-03-22 15:57:07,914: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[a71bcedd-0719-4894-8a78-d9efca886feb] received
+[2026-03-22 15:57:07,915: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[f6485b9c-2f79-467d-9619-0418f079e05c] received
+[2026-03-22 15:57:07,917: INFO/MainProcess] Task tasks.rss_worker.fetch_single_rss[270b9109-0e5e-4d1f-8b31-49cfe3848093] received
+[2026-03-22 15:57:08,109: WARNING/ForkPoolWorker-4] ✅ RSS France 24: 0 new items
+[2026-03-22 15:57:08,109: INFO/ForkPoolWorker-4] Task tasks.rss_worker.fetch_single_rss[6098e79a-38b7-44dd-a4ed-812112bbbb19] succeeded in 0.21426573700045992s: {'status': 'success', 'feed': 'France 24', 'new_items': 0}
+[2026-03-22 15:57:08,141: WARNING/ForkPoolWorker-16] ✅ RSS Al Jazeera: 0 new items
+[2026-03-22 15:57:08,142: INFO/ForkPoolWorker-16] Task tasks.rss_worker.fetch_single_rss[6ef7497a-f60f-4aff-bf37-636a7938b345] succeeded in 0.2547574429991073s: {'status': 'success', 'feed': 'Al Jazeera', 'new_items': 0}
+[2026-03-22 15:57:08,180: WARNING/ForkPoolWorker-9] ✅ RSS Times of Israel: 0 new items
+[2026-03-22 15:57:08,180: INFO/ForkPoolWorker-9] Task tasks.rss_worker.fetch_single_rss[ed7a753b-a4ce-4d55-91b3-fa52ff4c3ad4] succeeded in 0.26934594300109893s: {'status': 'success', 'feed': 'Times of Israel', 'new_items': 0}
+[2026-03-22 15:57:08,258: WARNING/ForkPoolWorker-13] ✅ RSS SCMP: 0 new items
+[2026-03-22 15:57:08,259: INFO/ForkPoolWorker-13] Task tasks.rss_worker.fetch_single_rss[0c027103-68c0-4aad-bc5f-fff36d780319] succeeded in 0.38068078300057095s: {'status': 'success', 'feed': 'SCMP', 'new_items': 0}
+[2026-03-22 15:57:08,266: WARNING/ForkPoolWorker-14] ✅ RSS NYTimes: 0 new items
+[2026-03-22 15:57:08,266: INFO/ForkPoolWorker-14] Task tasks.rss_worker.fetch_single_rss[68ffd4d6-301c-4246-b2ad-a4f9b3ec0a81] succeeded in 0.3833435449996614s: {'status': 'success', 'feed': 'NYTimes', 'new_items': 0}
+[2026-03-22 15:57:08,269: WARNING/ForkPoolWorker-7] ⚠️ RSS parse error for Ukraine Pravda: <urlopen error [Errno -2] Name or service not known>
+[2026-03-22 15:57:08,270: INFO/ForkPoolWorker-7] Task tasks.rss_worker.fetch_single_rss[3e693570-22a3-47a4-bb33-b6ccd2ed68a4] succeeded in 0.36539426799936336s: {'status': 'error', 'message': '<urlopen error [Errno -2] Name or service not known>'}
+[2026-03-22 15:57:08,291: WARNING/ForkPoolWorker-6] ✅ RSS The Guardian World: 0 new items
+[2026-03-22 15:57:08,291: INFO/ForkPoolWorker-6] Task tasks.rss_worker.fetch_single_rss[e1ab1785-35c0-4a26-abc9-65fe6cf27e1d] succeeded in 0.39155973000015365s: {'status': 'success', 'feed': 'The Guardian World', 'new_items': 0}
+[2026-03-22 15:57:08,339: WARNING/ForkPoolWorker-2] ⚠️ RSS parse error for Reuters World: <urlopen error [Errno -2] Name or service not known>
+[2026-03-22 15:57:08,342: INFO/ForkPoolWorker-2] Task tasks.rss_worker.fetch_single_rss[6feef462-cee0-4e8a-905d-eb47fd4a2129] succeeded in 0.4503839789995254s: {'status': 'error', 'message': '<urlopen error [Errno -2] Name or service not known>'}
+[2026-03-22 15:57:08,484: WARNING/ForkPoolWorker-4] ✅ RSS Bellingcat: 0 new items
+[2026-03-22 15:57:08,484: INFO/ForkPoolWorker-4] Task tasks.rss_worker.fetch_single_rss[a71bcedd-0719-4894-8a78-d9efca886feb] succeeded in 0.3746874169992225s: {'status': 'success', 'feed': 'Bellingcat', 'new_items': 0}
+[2026-03-22 15:57:08,500: WARNING/ForkPoolWorker-5] ⚠️ RSS parse error for DW News: <unknown>:2:0: syntax error
+[2026-03-22 15:57:08,501: INFO/ForkPoolWorker-5] Task tasks.rss_worker.fetch_single_rss[e8ba2d49-497c-415f-9d99-4ec25629a6ca] succeeded in 0.6015586489993439s: {'status': 'error', 'message': '<unknown>:2:0: syntax error'}
+[2026-03-22 15:57:08,905: WARNING/ForkPoolWorker-10] ✅ NewsAPI: 0 new articles
+[2026-03-22 15:57:08,907: INFO/ForkPoolWorker-10] Task tasks.news_worker.fetch_news[e0c43f2a-adcc-4dc1-9359-10a91788d0a4] succeeded in 1.0486468149993016s: {'status': 'success', 'new_articles': 0}
+[2026-03-22 15:57:08,933: WARNING/ForkPoolWorker-8] ⚠️ RSS parse error for Jerusalem Post: text/html; charset=utf-8 is not an XML media type
+[2026-03-22 15:57:08,934: INFO/ForkPoolWorker-8] Task tasks.rss_worker.fetch_single_rss[db49f3dc-f252-4f94-88f0-95aa372e278c] succeeded in 1.022567677000552s: {'status': 'error', 'message': 'text/html; charset=utf-8 is not an XML media type'}
+[2026-03-22 15:57:09,033: WARNING/ForkPoolWorker-15] ✅ RSS BBC World: 0 new items
+[2026-03-22 15:57:09,033: INFO/ForkPoolWorker-15] Task tasks.rss_worker.fetch_single_rss[848f5106-17ce-40b9-8c88-0044df40befc] succeeded in 1.1501964460003364s: {'status': 'success', 'feed': 'BBC World', 'new_items': 0}
+[2026-03-22 15:57:09,193: WARNING/ForkPoolWorker-3] ⚠️ RSS parse error for AP News: <unknown>:351:32: not well-formed (invalid token)
+[2026-03-22 15:57:09,194: INFO/ForkPoolWorker-3] Task tasks.rss_worker.fetch_single_rss[dfd8fd7b-c639-4e53-8735-3fbd6322be5f] succeeded in 1.302734271999725s: {'status': 'error', 'message': '<unknown>:351:32: not well-formed (invalid token)'}
+[2026-03-22 15:57:09,288: WARNING/ForkPoolWorker-16] ⚠️ RSS parse error for Military Times: <unknown>:34:189: not well-formed (invalid token)
+[2026-03-22 15:57:09,289: INFO/ForkPoolWorker-16] Task tasks.rss_worker.fetch_single_rss[f6485b9c-2f79-467d-9619-0418f079e05c] succeeded in 1.1471220109997375s: {'status': 'error', 'message': '<unknown>:34:189: not well-formed (invalid token)'}
+[2026-03-22 15:57:09,383: WARNING/ForkPoolWorker-1] ✅ RSS TASS: 0 new items
+[2026-03-22 15:57:09,384: INFO/ForkPoolWorker-1] Task tasks.rss_worker.fetch_single_rss[64a106a9-acf2-439c-b328-30dbfa55034e] succeeded in 1.4971068639988516s: {'status': 'success', 'feed': 'TASS', 'new_items': 0}
+[2026-03-22 15:57:09,691: WARNING/ForkPoolWorker-9] ⚠️ RSS parse error for Defense One: <unknown>:20:42: not well-formed (invalid token)
+[2026-03-22 15:57:09,692: INFO/ForkPoolWorker-9] Task tasks.rss_worker.fetch_single_rss[270b9109-0e5e-4d1f-8b31-49cfe3848093] succeeded in 1.5115682589985227s: {'status': 'error', 'message': '<unknown>:20:42: not well-formed (invalid token)'}
+[2026-03-22 15:57:09,884: WARNING/ForkPoolWorker-11] ⚠️ RSS parse error for Kyiv Independent: <unknown>:2:729247: not well-formed (invalid token)
+[2026-03-22 15:57:09,886: INFO/ForkPoolWorker-11] Task tasks.rss_worker.fetch_single_rss[9d382f13-590e-49e4-ad74-c0ea5ebb07c4] succeeded in 1.9810518880003656s: {'status': 'error', 'message': '<unknown>:2:729247: not well-formed (invalid token)'}
+[2026-03-22 15:57:13,254: WARNING/ForkPoolWorker-12] ✅ RSS Russia Today: 0 new items
+[2026-03-22 15:57:13,263: INFO/ForkPoolWorker-12] Task tasks.rss_worker.fetch_single_rss[ed1dd185-ae5c-4edd-9ab8-748c1d746bbd] succeeded in 5.386004784999386s: {'status': 'success', 'feed': 'Russia Today', 'new_items': 0}
+[2026-03-22 15:57:14,095: INFO/MainProcess] Task tasks.reddit_worker.fetch_reddit[0faa2a75-ba9f-47c0-88de-615e2e302768] received
+[2026-03-22 15:57:15,432: WARNING/ForkPoolWorker-10] ✅ Reddit: 0 new posts
+[2026-03-22 15:57:15,443: INFO/ForkPoolWorker-10] Task tasks.reddit_worker.fetch_reddit[0faa2a75-ba9f-47c0-88de-615e2e302768] succeeded in 1.3461838380007976s: {'status': 'success', 'new_posts': 0}

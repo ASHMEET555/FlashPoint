@@ -1,0 +1,306 @@
+{
+  "rss_feeds": [
+    {
+      "name": "Russia Today",
+      "url": "https://www.rt.com/rss/news/",
+      "bias": "Pro Russia",
+      "enabled": true,
+      "polling_interval": 270
+    },
+    {
+      "name": "SCMP",
+      "url": "https://www.scmp.com/rss/318199/feed/",
+      "bias": "Pro China",
+      "enabled": true,
+      "polling_interval": 250
+    },
+    {
+      "name": "NYTimes",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+      "bias": "US/Western",
+      "enabled": true,
+      "polling_interval": 235
+    },
+    {
+      "name": "BBC World",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "bias": "UK/Western",
+      "enabled": true,
+      "polling_interval": 245
+    },
+    {
+      "name": "Al Jazeera",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "bias": "Middle East",
+      "enabled": true,
+      "polling_interval": 250
+    },
+    {
+      "name": "TASS",
+      "url": "https://tass.com/rss/v2.xml",
+      "bias": "Pro Russia",
+      "enabled": true,
+      "polling_interval": 255
+    },
+    {
+      "name": "Reuters World",
+      "url": "https://feeds.reuters.com/reuters/worldNews",
+      "bias": "US/Western",
+      "enabled": true,
+      "polling_interval": 200
+    },
+    {
+      "name": "AP News",
+      "url": "https://apnews.com/hub/world-news/feed",
+      "bias": "US/Western",
+      "enabled": true,
+      "polling_interval": 210
+    },
+    {
+      "name": "France 24",
+      "url": "https://www.france24.com/en/rss",
+      "bias": "European",
+      "enabled": true,
+      "polling_interval": 270
+    },
+    {
+      "name": "DW News",
+      "url": "https://www.dw.com/en/rss",
+      "bias": "European",
+      "enabled": true,
+      "polling_interval": 260
+    },
+    {
+      "name": "The Guardian World",
+      "url": "https://feeds.theguardian.com/theguardian/world/rss",
+      "bias": "UK/Western",
+      "enabled": true,
+      "polling_interval": 240
+    },
+    {
+      "name": "Kyiv Independent",
+      "url": "https://kyivindependent.com/feed/",
+      "bias": "Pro Ukraine",
+      "enabled": true,
+      "polling_interval": 235
+    },
+    {
+      "name": "Ukraine Pravda",
+      "url": "https://en.pravda.com.ua/rss/",
+      "bias": "Pro Ukraine",
+      "enabled": true,
+      "polling_interval": 245
+    },
+    {
+      "name": "Jerusalem Post",
+      "url": "https://www.jpost.com/rss/rssfeed.aspx",
+      "bias": "Pro Israel",
+      "enabled": true,
+      "polling_interval": 250
+    },
+    {
+      "name": "Times of Israel",
+      "url": "https://www.timesofisrael.com/feed/",
+      "bias": "Pro Israel",
+      "enabled": true,
+      "polling_interval": 235
+    },
+    {
+      "name": "Bellingcat",
+      "url": "https://www.bellingcat.com/feed/",
+      "bias": "Independent OSINT",
+      "enabled": true,
+      "polling_interval": 240
+    },
+    {
+      "name": "Military Times",
+      "url": "https://www.militarytimes.com/feed/",
+      "bias": "US Military",
+      "enabled": true,
+      "polling_interval": 250
+    },
+    {
+      "name": "Defense One",
+      "url": "https://www.defenseone.com/rss/",
+      "bias": "US Defense",
+      "enabled": true,
+      "polling_interval": 260
+    }
+  ],
+  "news_sources": [
+    {
+      "name": "GNews API",
+      "query": "world conflict war geopolitics",
+      "enabled": true,
+      "polling_interval": 300
+    }
+  ],
+  "reddit_sources": [
+    {
+      "name": "Reddit Multi-Subreddit",
+      "subreddits": [
+        "worldnews",
+        "geopolitics",
+        "news",
+        "breakingnews",
+        "politics",
+        "UkrainianConflict",
+        "syriancivilwar",
+        "YemenVoice",
+        "Israel_Palestine",
+        "intelligence"
+      ],
+      "post_limit": 50,
+      "bias": "Varied",
+      "enabled": true,
+      "polling_interval": 120
+    }
+  ],
+  "telegram_sources": [
+    {
+      "name": "Telegram Intelligence Network",
+      "channels": [
+        {
+          "handle": "intelslava",
+          "bias": "Pro Russia",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "insider_paper",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "disclosetv",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "DefenderDome",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "englishabuali",
+          "bias": "Middle East",
+          "region": "Middle East"
+        },
+        {
+          "handle": "OSINTdefender",
+          "bias": "Independent OSINT",
+          "region": "Global"
+        },
+        {
+          "handle": "war_monitor",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "OsintTv",
+          "bias": "Independent OSINT",
+          "region": "Global"
+        },
+        {
+          "handle": "deepstatemap",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "militarnyi",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "kyivairforcealerts",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "andriytsaplienko",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "gerashchenko_en",
+          "bias": "Pro Ukraine",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "wararchive_ru",
+          "bias": "Pro Russia",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "militaryland",
+          "bias": "Independent",
+          "region": "Ukraine-Russia"
+        },
+        {
+          "handle": "ourwarstoday",
+          "bias": "Independent",
+          "region": "Middle East"
+        },
+        {
+          "handle": "warmonitors",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "conflictintel",
+          "bias": "Independent OSINT",
+          "region": "Global"
+        },
+        {
+          "handle": "gz_osint",
+          "bias": "Independent OSINT",
+          "region": "Global"
+        },
+        {
+          "handle": "waronlfakes",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "middleeastupdates",
+          "bias": "Middle East",
+          "region": "Middle East"
+        },
+        {
+          "handle": "osintdefense",
+          "bias": "Independent OSINT",
+          "region": "Global"
+        },
+        {
+          "handle": "breakingnewslive",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "wararchive",
+          "bias": "Independent",
+          "region": "Global"
+        },
+        {
+          "handle": "geopoliticsalive",
+          "bias": "Independent",
+          "region": "Global"
+        }
+      ],
+      "enabled": true,
+      "mode": "streaming",
+      "backfill_messages": 20
+    }
+  ],
+  "config": {
+    "version": "2.0",
+    "last_updated": "2026-03-07T12:00:00Z",
+    "auto_reload": true,
+    "reload_interval": 300,
+    "total_sources": {
+      "rss": 18,
+      "telegram": 25,
+      "reddit": 10,
+      "news_api": 1
+    }
+  }
+}
